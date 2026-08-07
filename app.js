@@ -32,9 +32,13 @@ function ac() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (AC) audioCtx = new AC();
   }
-  if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  // iOS reports "interrupted" (not "suspended") after backgrounding/lock
+  if (audioCtx && audioCtx.state !== "running") audioCtx.resume().catch(() => {});
   return audioCtx;
 }
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && audioCtx && audioCtx.state !== "running") audioCtx.resume().catch(() => {});
+});
 
 function tone(freq, dur, type, vol, when = 0, glideTo = null) {
   const ctx = ac();
@@ -125,7 +129,8 @@ function makeProblem(nDigits) {
     }
     const b = randInt(2, 9);
     if (a % 10 === 0 && Math.random() < 0.7) continue;   // mostly avoid ...0 × b
-    const hasCarry = columnCarries(a, b).some((c) => c > 0);
+    // internal carries only — overflow out of the leftmost column isn't a carrying step
+    const hasCarry = columnCarries(a, b).slice(0, -1).some((c) => c > 0);
     if (!hasCarry && Math.random() < 0.7) continue;      // most problems should carry
     return { a, b, product: a * b, nDigits };
   }
@@ -144,7 +149,12 @@ function makeRound(modeId) {
     seen.add(key);
     problems.push(p);
   }
-  if (modeId === "mixed") problems.sort(() => Math.random() - 0.5);
+  if (modeId === "mixed") {
+    for (let i = problems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [problems[i], problems[j]] = [problems[j], problems[i]];
+    }
+  }
   return problems;
 }
 
@@ -260,7 +270,24 @@ function renderGame() {
     ? `<span class="onfire">🔥 ON FIRE ×${G.streak}</span>`
     : `Streak <b>${G.streak}</b>`;
   const quit = el("button", "quit-btn", "⏹ End");
-  quit.addEventListener("click", () => { sfx.tap(); renderHome(); });
+  quit.addEventListener("click", () => {
+    if (!quit.dataset.arm) {                 // two-tap confirm so one mis-tap can't end the round
+      quit.dataset.arm = "1";
+      quit.textContent = "End round?";
+      setTimeout(() => {
+        if (quit.isConnected) { delete quit.dataset.arm; quit.textContent = "⏹ End"; }
+      }, 2000);
+      sfx.tap();
+      return;
+    }
+    if (G && (G.score > 0 || G.baskets > 0)) {   // bank what was earned in the partial round
+      store.career.points += G.score;
+      store.career.baskets += G.baskets;
+      saveStore();
+    }
+    sfx.tap();
+    renderHome();
+  });
   sb.append(shotNo, score, streak, quit);
   game.appendChild(sb);
 
@@ -292,6 +319,7 @@ function renderGame() {
 
   game.appendChild(play);
   app.appendChild(game);
+  paintActive();
 }
 
 function buildProblemCard() {
@@ -302,6 +330,9 @@ function buildProblemCard() {
   G.active = { kind: "answer", i: n - 1 };
   G.attempt = 1;
   G.revealed = false;
+
+  G.awaitNext = null;                 // null | "auto" (basket) | "manual" (revealed miss)
+  G.clearUndo = null;
 
   const card = el("div", "problem-card");
   card.id = "problem-card";
@@ -350,7 +381,8 @@ function buildProblemCard() {
 
 function buildNumpad() {
   const pad = el("div", "numpad");
-  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"];
+  // ⌫ (recoverable) sits beside 0; clear-all C lives in the far corner
+  const keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "⌫", "0", "C"];
   for (const k of keys) {
     const btn = el("button", "key" + (k === "C" || k === "⌫" ? " util" : ""), k);
     btn.addEventListener("click", () => onKey(k));
@@ -384,12 +416,27 @@ function setCell(kind, i, val) {
   if (node) node.textContent = val;
 }
 
+function rightmostEmptyAnswer() {
+  for (let j = cellCount() - 1; j >= 0; j--) if (G.cells[j] === "") return j;
+  return -1;
+}
+
 function onKey(k) {
   if (G.revealed) return;
   if (k === "C") {
     const n = cellCount();
-    for (let i = 0; i < n; i++) { setCell("answer", i, ""); setCell("carry", i, ""); }
-    clearMarks();
+    const hasContent = G.cells.some((v) => v !== "") || G.carries.some((v) => v !== "");
+    if (!hasContent && G.clearUndo) {
+      G.clearUndo.cells.forEach((v, i) => setCell("answer", i, v));
+      G.clearUndo.carries.forEach((v, i) => setCell("carry", i, v));
+      G.clearUndo = null;
+      setFeedback("Undone!", "good");
+    } else if (hasContent) {
+      G.clearUndo = { cells: [...G.cells], carries: [...G.carries] };
+      for (let i = 0; i < n; i++) { setCell("answer", i, ""); setCell("carry", i, ""); }
+      clearMarks();
+      setFeedback("Cleared — press C again to undo", "");
+    }
     G.active = { kind: "answer", i: n - 1 };
     paintActive();
     sfx.tap();
@@ -412,8 +459,13 @@ function onKey(k) {
   // digit
   setCell(kind, i, k);
   cellNode(kind, i)?.classList.remove("good", "bad");
-  if (kind === "answer" && i > 0) G.active = { kind: "answer", i: i - 1 };
-  else if (kind === "carry") G.active = { kind: "answer", i: Math.min(i + 1, cellCount() - 1) };
+  if (kind === "answer" && i > 0) {
+    G.active = { kind: "answer", i: i - 1 };
+  } else if (kind === "carry") {
+    // return to the rightmost unfinished answer cell — never onto a filled digit
+    const j = rightmostEmptyAnswer();
+    G.active = { kind: "answer", i: j >= 0 ? j : i };
+  }
   paintActive();
   sfx.tap();
 }
@@ -426,7 +478,8 @@ function clearMarks() {
 function onShoot() {
   if (!G) return;
   const shootBtn = document.getElementById("shoot-btn");
-  if (G.revealed) { nextProblem(); return; }
+  if (G.awaitNext === "auto") return;                     // basket made — advance is coming
+  if (G.awaitNext === "manual") { nextProblem(); return } // revealed miss — SHOOT acts as Next
 
   const n = cellCount();
   const expected = expectedCells();
@@ -435,11 +488,20 @@ function onShoot() {
     sfx.miss();
     return;
   }
+  // a gap (or empty ones column) means they're not finished — don't burn an attempt
+  const L = G.cells.findIndex((v) => v !== "");
+  if (L >= 0 && G.cells.slice(L).some((v) => v === "")) {
+    setFeedback("Keep going — fill every column through to the ones!", "bad");
+    sfx.miss();
+    return;
+  }
 
+  const pad = n - String(curProblem().product).length;
   let allGood = true;
   for (let i = 0; i < n; i++) {
     const node = cellNode("answer", i);
-    const ok = G.cells[i] === expected[i];
+    // unused leading cells may be empty or a written 0 — both are correct
+    const ok = i < pad ? (G.cells[i] === "" || G.cells[i] === "0") : G.cells[i] === expected[i];
     if (!ok) allGood = false;
     node.classList.remove("good", "bad");
     node.classList.add(ok ? "good" : "bad");
@@ -460,26 +522,31 @@ function onShoot() {
     flyBall(pts);
     if (G.streak === 3) sfx.fire();
     G.revealed = true;
+    G.awaitNext = "auto";
     shootBtn.disabled = true;
-    setTimeout(() => { shootBtn.disabled = false; nextProblem(); }, 1150);
+    const g = G, myIdx = G.idx;
+    setTimeout(() => { if (G === g && G.idx === myIdx) nextProblem(); }, 1600);
   } else if (G.attempt === 1) {
     G.attempt = 2;
     setFeedback("Off the rim! Fix the red boxes and shoot again", "bad");
     sfx.rim();
   } else {
     // second miss: reveal answer + worked solution
+    const lostFire = G.streak >= 3;
     G.streak = 0;
     updateScoreboard();
     for (let i = 0; i < n; i++) {
-      setCell("answer", i, expected[i]);
       const node = cellNode("answer", i);
-      node.classList.remove("bad");
+      node.classList.remove("bad", "good");
+      if (i < pad) { setCell("answer", i, ""); continue; }   // unused cells stay blank, unmarked
+      setCell("answer", i, expected[i]);
       node.classList.add("good");
     }
     showWorking();
-    setFeedback("No basket — check the working, then hit Next", "bad");
+    setFeedback((lostFire ? "🔥 Streak over! " : "") + "No basket — check the working, then hit Next", "bad");
     sfx.miss();
     G.revealed = true;
+    G.awaitNext = "manual";
     shootBtn.textContent = "NEXT ▶";
   }
 }
@@ -497,9 +564,17 @@ function showWorking() {
     const isLast = i === digits.length - 1;
     let line = `<b>${p.b} × ${digits[i]}</b> (${names[i]}) = ${raw}`;
     if (carry > 0) line += ` + carry ${carry} = <b>${total}</b>`;
-    if (isLast) line += ` → write <b>${total}</b>`;
-    else line += ` → write <b>${total % 10}</b>, carry <b>${Math.floor(total / 10)}</b>`;
-    carry = Math.floor(total / 10);
+    const nextCarry = Math.floor(total / 10);
+    if (isLast) {
+      line += total >= 10
+        ? ` → write <b>${total}</b> (it fills the last ${String(total).length} boxes)`
+        : ` → write <b>${total}</b>`;
+    } else if (nextCarry > 0) {
+      line += ` → write <b>${total % 10}</b>, carry <b>${nextCarry}</b>`;
+    } else {
+      line += ` → write <b>${total % 10}</b>`;
+    }
+    carry = nextCarry;
     lines.push(line);
   }
   const w = el("div", "working");
@@ -599,7 +674,7 @@ function endRound() {
 
 /* ---------- keyboard support (handy on desktop) ---------- */
 document.addEventListener("keydown", (e) => {
-  if (!G || G.idx >= ROUND_LEN) return;
+  if (!G || G.idx >= ROUND_LEN || e.repeat) return;
   if (/^[0-9]$/.test(e.key)) onKey(e.key);
   else if (e.key === "Backspace") { e.preventDefault(); onKey("⌫"); }
   else if (e.key === "Enter") onShoot();

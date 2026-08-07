@@ -290,8 +290,8 @@ button {
 }
 
 .carry-cell {
-  width: 44px;
-  height: 40px;
+  width: 52px;
+  height: 48px;
   border-radius: 9px;
   border: 2px dashed #cbd5e1;
   color: var(--ball-dark);
@@ -324,6 +324,7 @@ button {
 }
 
 .answer-cell {
+  position: relative;
   width: 58px;
   height: 66px;
   border-radius: 12px;
@@ -339,6 +340,22 @@ button {
 .answer-cell.active { border-color: var(--navy-700); background: #eff6ff; box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.25); }
 .answer-cell.good { border-color: var(--good); background: var(--good-bg); }
 .answer-cell.bad  { border-color: var(--bad); background: var(--bad-bg); animation: shake 0.35s; }
+/* tick/cross badges so right vs wrong is never colour-alone */
+.answer-cell.good::after, .answer-cell.bad::after {
+  position: absolute;
+  top: -10px;
+  right: -8px;
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  border-radius: 50%;
+  font-size: 16px;
+  text-align: center;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.answer-cell.good::after { content: "✓"; color: var(--good); }
+.answer-cell.bad::after  { content: "✗"; color: var(--bad); }
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-5px); }
