@@ -1,38 +1,36 @@
 # 🏀 Hoop Maths
 
-**Henry's Hoop Maths** — a basketball shootaround for practising **vertical multiplication with carrying**, built for iPad. Play it here → **https://aussiescupper.github.io/hoop-maths/**
+**Play it here → https://aussiescupper.github.io/hoop-maths/**
 
-A ScupperLab production, sibling app to [Skate Maths](https://github.com/aussiescupper/skate-maths).
+Henry's Hoop Maths — a vertical multiplication practice game for iPad. Solve
+2-digit × 1-digit (2-pointers) and 3-digit × 1-digit (3-pointers) problems
+column by column, carries and all, then SHOOT. Three in a row and you're
+🔥 ON FIRE.
 
-## How it works
+A ScupperLab production.
 
-Every problem is laid out **vertically, just like the school worksheets** — top number, × digit, ruled line, and empty answer boxes. You build the answer **column by column from the ones**, using the on-screen number pad. Dashed **carry boxes** above the top number give you scratch space for carries (toggle them off from the home screen when you're ready to carry in your head).
+## How it plays
 
-When the answer is in, hit **SHOOT!** 🏀
-
-- **Swish** — every box right first go: the ball flies into the hoop. 2-digit problems are worth **2 points**, 3-digit problems **3 points**.
-- **Off the rim** — wrong boxes turn red; fix them and shoot again for a **rebound putback** (1 point).
-- **Miss twice** — the full column-by-column working is shown, so every miss teaches the method.
-- **On fire** 🔥 — three baskets in a row starts a hot streak: +1 bonus point per basket until you miss.
-
-A round is **10 shots**. The scoreboard tracks score and streak; the final buzzer shows baskets, best streak, and any new record. Career points, baskets, games and per-mode records are saved on the device.
-
-## Modes
-
-| Mode | Problems | Worth |
-|---|---|---|
-| **2-digit** | 63 × 9, 82 × 8 … | 2-pointers |
-| **3-digit** | 485 × 8, 738 × 7 … | 3-pointers |
-| **Mix it up** | both, shuffled | 2 & 3 pointers |
-
-Problems are generated to need carrying most of the time, and the 3-digit mode deliberately includes **internal-zero numbers** (304 × 5 style) — the classic place-value traps.
+- Pick a mode: **2-digit**, **3-digit**, or **Mix it up** (five of each).
+- Build the answer from the **ones column**, right to left, on the big numpad.
+  The dashed boxes above the sum are scratch space for carries (turn them off
+  on the home screen when you can carry in your head).
+- **SHOOT!** Every column right = basket. One miss = a rebound chance with the
+  wrong boxes marked. Two misses = the full worked solution, column by column.
+- 10 shots a round. First-try baskets score 2 or 3 points; on-fire baskets
+  score a bonus; rebound putbacks score 1. Career points, baskets and per-mode
+  records are saved on the device.
+- Problems are generated to almost always involve carrying, and deliberately
+  include internal-zero numbers (304 × 6 style) — the classic place-value traps.
 
 ## Install on iPad
 
-1. Open the link above in **Safari**.
-2. Tap **Share → Add to Home Screen**.
-3. It runs full-screen and **works offline** after the first load.
+Open the link in Safari → Share → **Add to Home Screen**. Works offline after
+the first load. Updates you deploy are picked up automatically on the next
+online launch (app shell is network-first with offline fallback).
 
-## Tech
+## Stack
 
-Vanilla HTML/CSS/JS, no dependencies. PWA with a cache-first service worker, WebAudio sound effects (no audio files), and localStorage for progress. Icons generated with Python/Pillow.
+Vanilla HTML/CSS/JS, no dependencies. PWA: `manifest.webmanifest` + `sw.js`
+(network-first shell, cache-first icons). Sounds are synthesised with WebAudio —
+no audio files. Deployed from `main` via GitHub Pages.
