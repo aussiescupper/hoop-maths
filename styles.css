@@ -160,6 +160,51 @@ button {
 .toggle.on { background: var(--good); }
 .toggle.on::after { left: 29px; }
 
+.prize-row { display: flex; align-items: center; gap: 8px; }
+.prize-btn {
+  padding: 9px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--paper);
+  opacity: 0.75;
+  font-size: 13px;
+}
+.prize-remove {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--paper);
+  font-size: 14px;
+}
+.prize-claim {
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: 0 6px 0 #b8860b;
+  animation: firepulse 0.8s infinite alternate;
+}
+.video-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.video-overlay video { max-width: 100%; max-height: 100%; }
+.video-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(14px + env(safe-area-inset-right));
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  font-size: 22px;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  z-index: 61;
+}
+.perfect-title { color: var(--gold); animation: firepulse 0.8s infinite alternate; }
+
 .scupperlab { font-size: 12px; opacity: 0.45; margin-top: 6px; letter-spacing: 0.4px; }
 
 /* ---------- game screen ---------- */

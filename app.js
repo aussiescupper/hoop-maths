@@ -89,6 +89,70 @@ const sfx = {
   cheer()  { noiseBurst(1.0, 0.12, 0, 3000, 1500); [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.22, "triangle", 0.1, 0.1 + i * 0.12)); },
 };
 
+/* ---------- prize video (stored on-device only, via IndexedDB) ---------- */
+let prizeAvailable = false;
+
+function idbOpen() {
+  return new Promise((res, rej) => {
+    if (!("indexedDB" in window)) { rej(new Error("no idb")); return; }
+    const r = indexedDB.open("hoopmaths-media", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("media");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbSet(key, val) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("media", "readwrite");
+    tx.objectStore("media").put(val, key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+async function idbGet(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const rq = db.transaction("media", "readonly").objectStore("media").get(key);
+    rq.onsuccess = () => res(rq.result || null);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function idbDel(key) {
+  const db = await idbOpen();
+  return new Promise((res, rej) => {
+    const tx = db.transaction("media", "readwrite");
+    tx.objectStore("media").delete(key);
+    tx.oncomplete = () => res();
+    tx.onerror = () => rej(tx.error);
+  });
+}
+
+async function claimPrize() {
+  let blob = null;
+  try { blob = await idbGet("prize"); } catch (e) { /* no storage */ }
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const overlay = el("div", "video-overlay");
+  const vid = document.createElement("video");
+  vid.src = url;
+  vid.controls = true;
+  vid.autoplay = true;
+  vid.playsInline = true;
+  vid.setAttribute("playsinline", "");
+  const close = el("button", "video-close", "✕");
+  const cleanup = () => {
+    try { vid.pause(); } catch (e) {}
+    URL.revokeObjectURL(url);
+    overlay.remove();
+  };
+  close.addEventListener("click", cleanup);
+  vid.addEventListener("ended", () => setTimeout(cleanup, 800));
+  overlay.append(vid, close);
+  document.body.appendChild(overlay);
+  vid.play().catch(() => {});
+}
+
 /* ---------- modes ---------- */
 const MODES = {
   two:   { label: "2-digit", sample: "63 × 9", pts: 2, digits: [2] },
@@ -254,6 +318,40 @@ function renderHome() {
   toggleRow.appendChild(el("span", null, "Carry boxes"));
   toggleRow.appendChild(toggle);
   home.appendChild(toggleRow);
+
+  // prize video setup (parents): stored only on this device, never uploaded
+  const prizeRow = el("div", "prize-row");
+  const fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = "video/mp4,video/quicktime,video/*";
+  fileInput.style.display = "none";
+  const prizeBtn = el("button", "prize-btn",
+    prizeAvailable ? "🎁 Prize ready — tap to change" : "🎁 Set prize video (parents)");
+  const removeBtn = el("button", "prize-remove", "✕");
+  removeBtn.style.display = prizeAvailable ? "inline-block" : "none";
+  fileInput.addEventListener("change", async () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    try {
+      await idbSet("prize", f);
+      prizeAvailable = true;
+      prizeBtn.textContent = "🎁 Prize ready — tap to change";
+      removeBtn.style.display = "inline-block";
+      sfx.cheer();
+    } catch (e) {
+      alert("Couldn't save the video on this device — check free storage and try again.");
+    }
+  });
+  prizeBtn.addEventListener("click", () => { sfx.tap(); fileInput.click(); });
+  removeBtn.addEventListener("click", async () => {
+    try { await idbDel("prize"); } catch (e) {}
+    prizeAvailable = false;
+    prizeBtn.textContent = "🎁 Set prize video (parents)";
+    removeBtn.style.display = "none";
+    sfx.tap();
+  });
+  prizeRow.append(prizeBtn, removeBtn, fileInput);
+  home.appendChild(prizeRow);
 
   home.appendChild(el("div", "scupperlab", "A ScupperLab production"));
   app.appendChild(home);
@@ -862,13 +960,19 @@ function endRound() {
   saveStore();
   if (isBest && G.score > 0) setTimeout(() => sfx.cheer(), 500);
 
+  const perfect = G.baskets === ROUND_LEN;
   const summary = el("div", "summary");
-  summary.appendChild(el("h2", null, "Full time! 🏁"));
+  summary.appendChild(el("h2", perfect ? "perfect-title" : null, perfect ? "PERFECT GAME! 🏆" : "Full time! 🏁"));
   summary.appendChild(el("div", "final-score", `${G.score} pts`));
   const sub = el("div", "sub");
   sub.innerHTML = `🏀 Baskets: <b>${G.baskets} / ${ROUND_LEN}</b> &nbsp;•&nbsp; 🔥 Best streak: <b>${G.bestStreak}</b>`;
   summary.appendChild(sub);
   if (isBest && G.score > 0) summary.appendChild(el("div", "newbest", `⭐ New ${MODES[modeId].label} record!`));
+  if (perfect && prizeAvailable) {
+    const prize = el("button", "big-btn prize-claim", "🎁 CLAIM YOUR PRIZE!");
+    prize.addEventListener("click", () => { sfx.cheer(); claimPrize(); });
+    summary.appendChild(prize);
+  }
 
   const btns = el("div", "summary-btns");
   const again = el("button", "big-btn primary", "Play again");
@@ -908,7 +1012,10 @@ muteBtn.addEventListener("click", () => {
 paintMute();
 
 /* ---------- boot ---------- */
-renderHome();
+idbGet("prize")
+  .then((b) => { prizeAvailable = !!b; })
+  .catch(() => {})
+  .finally(() => renderHome());
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
