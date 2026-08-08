@@ -430,20 +430,18 @@ function speak(text) {
 }
 /* Recorded coach clips (audio/coach-0.m4a … coach-6.m4a). If a clip is
    missing or fails to play, fall back to speech synthesis. */
-let coachClips = null;
+const coachClips = {};
 let currentClip = null;
-function playCoachLine(i, fallbackText) {
+function playCoachLine(clipUrl, fallbackText) {
   if (store.muted) return;
-  if (!coachClips) {
-    coachClips = COACH_STEPS.map((_, k) => {
-      const a = new Audio(`audio/coach-${k}.m4a`);
-      a.preload = "auto";
-      return a;
-    });
-  }
   hushCoach();
-  const clip = coachClips[i];
-  if (!clip) { speak(fallbackText); return; }
+  if (!clipUrl) { speak(fallbackText); return; }
+  if (!coachClips[clipUrl]) {
+    const a = new Audio(clipUrl);
+    a.preload = "auto";
+    coachClips[clipUrl] = a;
+  }
+  const clip = coachClips[clipUrl];
   try {
     clip.currentTime = 0;
     currentClip = clip;
@@ -459,52 +457,110 @@ function hushCoach() {
   if (currentClip) { try { currentClip.pause(); } catch (e) {} currentClip = null; }
 }
 
-/* Worked example: 47 × 8 = 376 — one assist, then the dunk. Grid: 3 columns. */
-const COACH_STEPS = [
-  { cap: "Every column is a player on your team. The ONES player always takes the first shot.",
-    say: "Every column is a player on your team. The ones player always takes the first shot.",
-    run: () => coachSpot([2]) },
-  { cap: "Ones shoots… 8 × 7 = 56!", bubble: "8 × 7 = 56",
-    say: "Ones shoots. 8 times 7 is 56!",
-    run: () => coachSpot([2]) },
-  { cap: "A player can only bank ONE digit. Bank the 6…", bubble: "56 → bank 6",
-    say: "A player can only bank one digit. Bank the 6.",
-    run: () => coachBank(2, "6") },
-  { cap: "…and pass the 5 as an ASSIST to the tens player.", bubble: "56 → bank 6, assist 5",
-    say: "And pass the 5 as an assist to the tens player.",
-    run: () => coachAssist(2, 1, "5") },
-  { cap: "Tens is the LAST player: 8 × 4 = 32… now ADD the assist: 32 + 5 = 37!", bubble: "8 × 4 = 32 + 5 = 37",
-    say: "Tens is the last player. 8 times 4 is 32. Now add the assist: 32 plus 5 is 37!",
-    run: () => coachSpot([1]) },
-  { cap: "The last player doesn't pass — they DUNK the whole number. SLAM!", bubble: "37 → dunk it all!",
-    say: "The last player doesn't pass. They dunk the whole number. Slam!",
-    run: () => { coachBank(1, "7"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
-  { cap: "47 × 8 = 376. Shoot right to left, and ALWAYS add the assist. Your ball now!", bubble: "376 🏀",
-    say: "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!",
-    run: () => sfx.cheer() },
+/* Two clinic chapters. Chapter 1 (47 × 8) has Dad's recorded clips
+   (audio/coach-N.m4a); chapter 2 (485 × 8) uses coach2-N.m4a when recorded,
+   falling back to speech until then. Player art: img/player-*.png */
+const P1 = "img/player-1s.png", P10 = "img/player-10s.png", P100 = "img/player-100s.png";
+
+const COACH_CHAPTERS = [
+  {
+    title: "Coach's Clinic 🏀", a: "47", b: "8", clipPrefix: "audio/coach-",
+    steps: [
+      { cap: "Every column is a player on your team. The ONES player always takes the first shot.",
+        say: "Every column is a player on your team. The ones player always takes the first shot.",
+        img: P1, run: () => coachSpot([2]) },
+      { cap: "Ones shoots… 8 × 7 = 56!", bubble: "8 × 7 = 56",
+        say: "Ones shoots. 8 times 7 is 56!",
+        img: P1, run: () => coachSpot([2]) },
+      { cap: "A player can only bank ONE digit. Bank the 6…", bubble: "56 → bank 6",
+        say: "A player can only bank one digit. Bank the 6.",
+        img: P1, run: () => coachBank(2, "6") },
+      { cap: "…and pass the 5 as an ASSIST to the tens player.", bubble: "56 → bank 6, assist 5",
+        say: "And pass the 5 as an assist to the tens player.",
+        img: P1, run: () => coachAssist(2, 1, "5") },
+      { cap: "Tens is the LAST player: 8 × 4 = 32… now ADD the assist: 32 + 5 = 37!", bubble: "8 × 4 = 32 + 5 = 37",
+        say: "Tens is the last player. 8 times 4 is 32. Now add the assist: 32 plus 5 is 37!",
+        img: P10, run: () => coachSpot([1]) },
+      { cap: "The last player doesn't pass — they DUNK the whole number. SLAM!", bubble: "37 → dunk it all!",
+        say: "The last player doesn't pass. They dunk the whole number. Slam!",
+        img: P10, run: () => { coachBank(1, "7"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
+      { cap: "47 × 8 = 376. Shoot right to left, and ALWAYS add the assist. Your ball now!", bubble: "376 🏀",
+        say: "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!",
+        img: null, run: () => sfx.cheer() },
+    ],
+  },
+  {
+    title: "3-Pointer Clinic 🏀🏀🏀", a: "485", b: "8", clipPrefix: "audio/coach2-",
+    steps: [
+      { cap: "The 3-pointer clinic: THREE players this time. Ones still shoots first!",
+        say: "The 3-pointer clinic. Three players this time. Ones still shoots first!",
+        img: P1, run: () => coachSpot([3]) },
+      { cap: "Ones shoots… 8 × 5 = 40. Bank the 0, assist the 4!", bubble: "8 × 5 = 40 → bank 0, assist 4",
+        say: "Ones shoots. 8 times 5 is 40. Bank the 0, assist the 4!",
+        img: P1, run: () => { coachBank(3, "0"); coachAssist(3, 2, "4"); } },
+      { cap: "Tens shoots… 8 × 8 = 64, plus the assist: 68!", bubble: "8 × 8 = 64 + 4 = 68",
+        say: "Tens shoots. 8 times 8 is 64. Plus the assist makes 68!",
+        img: P10, run: () => coachSpot([2]) },
+      { cap: "Bank the 8, pass the 6 up the court.", bubble: "68 → bank 8, assist 6",
+        say: "Bank the 8, pass the 6 up the court.",
+        img: P10, run: () => { coachBank(2, "8"); coachAssist(2, 1, "6"); } },
+      { cap: "Now the BIG number-100s player steps up: 8 × 4 = 32, plus the assist: 38!", bubble: "8 × 4 = 32 + 6 = 38",
+        say: "Now the big hundreds player steps up. 8 times 4 is 32. Plus the assist makes 38!",
+        img: P100, run: () => coachSpot([1]) },
+      { cap: "Last player, no pass — DUNK the whole 38. BOOM!", bubble: "38 → dunk it all!",
+        say: "Last player, no pass. Dunk the whole 38. Boom!",
+        img: P100, run: () => { coachBank(1, "8"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
+      { cap: "485 × 8 = 3880. Same moves, one more player. Your ball!", bubble: "3880 🏀",
+        say: "485 times 8 is 3880. Same moves, one more player. Your ball!",
+        img: null, run: () => sfx.cheer() },
+    ],
+  },
 ];
 
 function coachNext() {
   if (!COACH) return;
+  const chapter = COACH_CHAPTERS[COACH.chapter];
   COACH.step++;
-  if (COACH.step >= COACH_STEPS.length) { COACH = null; hushCoach(); renderHome(); return; }
-  const s = COACH_STEPS[COACH.step];
+  if (COACH.step >= chapter.steps.length) { COACH = null; hushCoach(); renderHome(); return; }
+  const s = chapter.steps[COACH.step];
   COACH.caption.textContent = s.cap;
   if (s.bubble) { COACH.bubble.textContent = s.bubble; COACH.bubble.style.visibility = "visible"; }
-  playCoachLine(COACH.step, s.say || s.cap);
+  // player portrait, synced with the voiceover
+  if (s.img) {
+    if (COACH.player.getAttribute("src") !== s.img) {
+      COACH.player.src = s.img;
+      COACH.player.classList.remove("player-pop");
+      void COACH.player.offsetWidth;          // restart the pop animation
+      COACH.player.classList.add("player-pop");
+    }
+    COACH.player.style.visibility = "visible";
+  } else {
+    COACH.player.style.visibility = "hidden";
+  }
+  playCoachLine(`${chapter.clipPrefix}${COACH.step}.m4a`, s.say || s.cap);
   s.run();
-  if (COACH.step === COACH_STEPS.length - 1) {
+  if (COACH.step === chapter.steps.length - 1) {
+    const hasNextChapter = COACH.chapter + 1 < COACH_CHAPTERS.length;
     COACH.nextBtn.textContent = "Got it — let's play! 🏀";
-    const replay = el("button", "big-btn secondary", "↺ Watch again");
-    replay.addEventListener("click", () => { sfx.tap(); renderCoach(); });
+    if (hasNextChapter) {
+      const nextCh = el("button", "big-btn primary", "3-Pointer Clinic ▶");
+      const myChapter = COACH.chapter;
+      nextCh.addEventListener("click", () => { sfx.select(); renderCoach(myChapter + 1); });
+      COACH.nextBtn.parentElement.insertBefore(nextCh, COACH.nextBtn);
+    }
+    const replayChapter = COACH.chapter;
+    const replay = el("button", "big-btn secondary", "↺ Again");
+    replay.addEventListener("click", () => { sfx.tap(); renderCoach(replayChapter); });
     COACH.nextBtn.parentElement.appendChild(replay);
   }
 }
 
-function renderCoach() {
+function renderCoach(chapterIdx = 0) {
   G = null;
   COACH = null;
+  hushCoach();
   app.innerHTML = "";
+  const chapter = COACH_CHAPTERS[chapterIdx];
   const wrap = el("div", "coach");
 
   const back = el("button", "coach-back", "✕");
@@ -512,7 +568,7 @@ function renderCoach() {
   back.addEventListener("click", () => { COACH = null; hushCoach(); sfx.tap(); renderHome(); });
   wrap.appendChild(back);
 
-  wrap.appendChild(el("h2", "coach-title", "Coach's Clinic 🏀"));
+  wrap.appendChild(el("h2", "coach-title", chapter.title));
   const caption = el("div", "coach-caption");
   wrap.appendChild(caption);
   const bubble = el("div", "calc-bubble");
@@ -520,9 +576,18 @@ function renderCoach() {
   bubble.textContent = "—";
   wrap.appendChild(bubble);
 
+  // stage: player portrait beside the worked example
+  const stage = el("div", "coach-stage");
+  const player = document.createElement("img");
+  player.className = "coach-player";
+  player.alt = "";
+  player.style.visibility = "hidden";
+  stage.appendChild(player);
+
   const card = el("div", "problem-card coach-card");
   const grid = el("div", "digit-grid");
-  const n = 3;
+  const aStr = chapter.a;
+  const n = aStr.length + 1;
   grid.style.gridTemplateColumns = `repeat(${n}, auto)`;
   const carryNodes = [], topNodes = [], answerNodes = [];
   for (let i = 0; i < n; i++) {
@@ -530,7 +595,6 @@ function renderCoach() {
     carryNodes.push(c);
     grid.appendChild(c);
   }
-  const aStr = "47";
   for (let i = 0; i < n; i++) {
     const d = el("div", "top-digit", i === 0 ? "" : aStr[i - 1]);
     topNodes.push(d);
@@ -539,7 +603,7 @@ function renderCoach() {
   let bNode = null;
   for (let i = 0; i < n; i++) {
     if (i === 0) grid.appendChild(el("div", "times-sign", "×"));
-    else if (i === n - 1) { bNode = el("div", "bottom-digit", "8"); grid.appendChild(bNode); }
+    else if (i === n - 1) { bNode = el("div", "bottom-digit", chapter.b); grid.appendChild(bNode); }
     else grid.appendChild(el("div", "bottom-digit", ""));
   }
   grid.appendChild(el("div", "rule-line"));
@@ -549,7 +613,8 @@ function renderCoach() {
     grid.appendChild(cell);
   }
   card.appendChild(grid);
-  wrap.appendChild(card);
+  stage.appendChild(card);
+  wrap.appendChild(stage);
 
   const controls = el("div", "coach-controls");
   const nextBtn = el("button", "shoot-btn coach-next", "Next ▶");
@@ -558,7 +623,7 @@ function renderCoach() {
   wrap.appendChild(controls);
 
   app.appendChild(wrap);
-  COACH = { step: -1, caption, bubble, carryNodes, topNodes, answerNodes, bNode, nextBtn };
+  COACH = { chapter: chapterIdx, step: -1, caption, bubble, carryNodes, topNodes, answerNodes, bNode, nextBtn, player };
   coachNext();
 }
 

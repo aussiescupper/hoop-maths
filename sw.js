@@ -3,7 +3,7 @@
    offline — so a plain deploy reaches installed iPads on their next online
    launch, no cache-name bump required. Icons/static: cache-first.
    Uses RELATIVE paths so it works from any GitHub Pages subfolder. */
-const CACHE = "hoop-maths-v3";
+const CACHE = "hoop-maths-v4";
 
 // Resolve the scope so cached URLs match however the app is hosted.
 const SCOPE = self.registration ? self.registration.scope : "./";
@@ -24,6 +24,9 @@ const ASSETS = [
   "audio/coach-4.m4a",
   "audio/coach-5.m4a",
   "audio/coach-6.m4a",
+  "img/player-1s.png",
+  "img/player-10s.png",
+  "img/player-100s.png",
 ].map((p) => new URL(p, SCOPE).toString());
 
 self.addEventListener("install", (event) => {

@@ -506,7 +506,12 @@ button {
   background: rgba(255, 255, 255, 0.16);
   color: var(--paper);
 }
-.coach-title { font-size: clamp(24px, 4vh, 34px); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3); }
+.coach-title {
+  font-size: clamp(24px, 4vh, 34px);
+  text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3);
+  padding: 0 64px;
+  text-align: center;
+}
 .coach-caption {
   min-height: 62px;
   max-width: 660px;
@@ -548,8 +553,24 @@ button {
   border-color: var(--ball);
   animation: bankdrop 0.35s;
 }
-.coach-controls { display: flex; gap: 14px; align-items: center; }
+.coach-controls { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; justify-content: center; }
 .coach-next { max-width: 340px; padding: 12px 28px; }
+.coach-stage { display: flex; align-items: center; gap: 26px; }
+.coach-player {
+  height: clamp(150px, 30vh, 240px);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  background: #fff;
+}
+.player-pop { animation: playerpop 0.45s cubic-bezier(0.2, 1.5, 0.4, 1); }
+@keyframes playerpop {
+  from { transform: translateY(24px) scale(0.7) rotate(-4deg); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+@media (max-width: 700px) {
+  .coach-stage { flex-direction: column; gap: 12px; }
+  .coach-player { height: clamp(110px, 18vh, 160px); }
+}
 
 /* ---------- flying ball & fx ---------- */
 .fx-layer {

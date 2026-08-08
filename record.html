@@ -63,13 +63,22 @@
   <script>
     "use strict";
     const LINES = [
-      "Every column is a player on your team. The ones player always takes the first shot.",
-      "Ones shoots… 8 times 7 is 56!",
-      "A player can only bank ONE digit. Bank the 6…",
-      "…and pass the 5 as an ASSIST to the tens player.",
-      "Tens is the last player: 8 times 4 is 32… now ADD the assist: 32 plus 5 is 37!",
-      "The last player doesn't pass — they DUNK the whole number. SLAM!",
-      "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!",
+      // Chapter 1 — Coach's Clinic (47 × 8) — already recorded? re-record any time
+      { file: "coach-0.m4a",  text: "Every column is a player on your team. The ones player always takes the first shot." },
+      { file: "coach-1.m4a",  text: "Ones shoots… 8 times 7 is 56!" },
+      { file: "coach-2.m4a",  text: "A player can only bank ONE digit. Bank the 6…" },
+      { file: "coach-3.m4a",  text: "…and pass the 5 as an ASSIST to the tens player." },
+      { file: "coach-4.m4a",  text: "Tens is the last player: 8 times 4 is 32… now ADD the assist: 32 plus 5 is 37!" },
+      { file: "coach-5.m4a",  text: "The last player doesn't pass — they DUNK the whole number. SLAM!" },
+      { file: "coach-6.m4a",  text: "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!" },
+      // Chapter 2 — 3-Pointer Clinic (485 × 8)
+      { file: "coach2-0.m4a", text: "The 3-pointer clinic. Three players this time. Ones still shoots first!" },
+      { file: "coach2-1.m4a", text: "Ones shoots… 8 times 5 is 40. Bank the 0, assist the 4!" },
+      { file: "coach2-2.m4a", text: "Tens shoots… 8 times 8 is 64, plus the assist: 68!" },
+      { file: "coach2-3.m4a", text: "Bank the 8, pass the 6 up the court." },
+      { file: "coach2-4.m4a", text: "Now the BIG hundreds player steps up: 8 times 4 is 32, plus the assist: 38!" },
+      { file: "coach2-5.m4a", text: "Last player, no pass — DUNK the whole 38. BOOM!" },
+      { file: "coach2-6.m4a", text: "485 times 8 is 3880. Same moves, one more player. Your ball!" },
     ];
 
     const canMp4 = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported("audio/mp4");
@@ -83,16 +92,28 @@
 
     const cardsEl = document.getElementById("cards");
     LINES.forEach((line, i) => {
+      if (i === 0) {
+        const h = document.createElement("h2");
+        h.textContent = "Chapter 1 — Coach's Clinic (47 × 8)";
+        h.style.cssText = "font-size:19px;margin:8px 0 12px";
+        cardsEl.appendChild(h);
+      }
+      if (i === 7) {
+        const h = document.createElement("h2");
+        h.textContent = "Chapter 2 — 3-Pointer Clinic (485 × 8)";
+        h.style.cssText = "font-size:19px;margin:22px 0 12px";
+        cardsEl.appendChild(h);
+      }
       const card = document.createElement("div");
       card.className = "card";
       card.innerHTML = `
-        <div class="num">CLIP ${i} — saves as coach-${i}.m4a</div>
-        <div class="line">“${line}”</div>
+        <div class="num">saves as ${line.file}</div>
+        <div class="line">“${line.text}”</div>
         <div class="row">
           <button class="rec" data-i="${i}">● Record</button>
           <span class="status">not recorded</span>
           <audio controls></audio>
-          <a class="dl" download="coach-${i}.m4a">⬇ Download</a>
+          <a class="dl" download="${line.file}">⬇ Download</a>
         </div>`;
       cardsEl.appendChild(card);
     });
