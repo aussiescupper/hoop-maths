@@ -330,8 +330,35 @@ function speak(text) {
     speechSynthesis.speak(u);
   } catch (e) { /* captions still carry the lesson */ }
 }
+/* Recorded coach clips (audio/coach-0.m4a … coach-6.m4a). If a clip is
+   missing or fails to play, fall back to speech synthesis. */
+let coachClips = null;
+let currentClip = null;
+function playCoachLine(i, fallbackText) {
+  if (store.muted) return;
+  if (!coachClips) {
+    coachClips = COACH_STEPS.map((_, k) => {
+      const a = new Audio(`audio/coach-${k}.m4a`);
+      a.preload = "auto";
+      return a;
+    });
+  }
+  hushCoach();
+  const clip = coachClips[i];
+  if (!clip) { speak(fallbackText); return; }
+  try {
+    clip.currentTime = 0;
+    currentClip = clip;
+    const p = clip.play();
+    if (p && p.catch) p.catch(() => { currentClip = null; speak(fallbackText); });
+  } catch (e) {
+    currentClip = null;
+    speak(fallbackText);
+  }
+}
 function hushCoach() {
   if ("speechSynthesis" in window) { try { speechSynthesis.cancel(); } catch (e) {} }
+  if (currentClip) { try { currentClip.pause(); } catch (e) {} currentClip = null; }
 }
 
 /* Worked example: 47 × 8 = 376 — one assist, then the dunk. Grid: 3 columns. */
@@ -366,7 +393,7 @@ function coachNext() {
   const s = COACH_STEPS[COACH.step];
   COACH.caption.textContent = s.cap;
   if (s.bubble) { COACH.bubble.textContent = s.bubble; COACH.bubble.style.visibility = "visible"; }
-  speak(s.say || s.cap);
+  playCoachLine(COACH.step, s.say || s.cap);
   s.run();
   if (COACH.step === COACH_STEPS.length - 1) {
     COACH.nextBtn.textContent = "Got it — let's play! 🏀";

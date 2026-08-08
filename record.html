@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Coach Recording Booth — Hoop Maths</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Arial Rounded MT Bold", "Trebuchet MS", Verdana, sans-serif;
+      background: #0f2557;
+      color: #fffdf6;
+      min-height: 100vh;
+      padding: 24px 16px 60px;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    h1 { font-size: 28px; margin-bottom: 6px; }
+    .sub { opacity: 0.8; margin-bottom: 18px; line-height: 1.45; font-size: 15px; }
+    .warn {
+      background: #7f1d1d; border-radius: 12px; padding: 12px 16px;
+      margin-bottom: 18px; font-size: 15px; display: none;
+    }
+    .tips {
+      background: rgba(255,255,255,0.1); border-radius: 12px;
+      padding: 12px 16px; margin-bottom: 22px; font-size: 14px; line-height: 1.55;
+    }
+    .card {
+      background: #fffdf6; color: #10213f; border-radius: 16px;
+      padding: 16px 18px; margin-bottom: 14px;
+      box-shadow: 0 5px 0 rgba(0,0,0,0.25);
+    }
+    .card .num { font-size: 12px; font-weight: bold; color: #b34f14; letter-spacing: 1px; }
+    .card .line { font-size: 19px; font-weight: bold; line-height: 1.35; margin: 6px 0 12px; }
+    .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    button {
+      font-family: inherit; border: none; cursor: pointer;
+      border-radius: 12px; padding: 10px 18px; font-size: 15px; font-weight: bold;
+    }
+    .rec { background: #dc2626; color: #fff; }
+    .rec.armed { background: #16a34a; }
+    .dl { background: #1d4ed8; color: #fff; text-decoration: none; border-radius: 12px; padding: 10px 18px; font-size: 15px; font-weight: bold; display: none; }
+    audio { height: 40px; max-width: 220px; display: none; }
+    .status { font-size: 13px; opacity: 0.7; min-width: 90px; }
+    .done-note { margin-top: 22px; background: rgba(255,255,255,0.1); border-radius: 12px; padding: 14px 16px; font-size: 14px; line-height: 1.55; }
+    code { background: rgba(0,0,0,0.35); padding: 2px 6px; border-radius: 6px; font-size: 13px; }
+    .card code { background: #eee9da; color: #10213f; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🎙️ Coach Recording Booth</h1>
+    <p class="sub">Record the seven Coach's Clinic lines in your own voice. Tap <b>Record</b>, read the line with match-day energy, tap <b>Stop</b>, listen back, re-record as often as you like, then <b>Download</b> each clip.</p>
+    <div id="warn" class="warn"><b>Please open this page in Safari.</b> This browser records a format iPads can't play. Safari records .m4a, which works everywhere Hoop Maths runs.</div>
+    <div class="tips">
+      <b>Coach's tips:</b> quiet room · hold the device about 30&nbsp;cm away · smile while you read (it changes the sound) · say the numbers clearly · leave half a second of silence at the start and end. "SLAM!" deserves your full commentator voice.
+    </div>
+    <div id="cards"></div>
+    <div class="done-note">
+      <b>When you're done:</b> you'll have <code>coach-0.m4a</code> … <code>coach-6.m4a</code> in your Downloads. Move them into the repo's <code>audio/</code> folder (<code>~/ScupperLab/hoop-maths/audio/</code>) and tell Claude — the app will use your voice from then on, with the robot voice only as a fallback.
+    </div>
+  </div>
+
+  <script>
+    "use strict";
+    const LINES = [
+      "Every column is a player on your team. The ones player always takes the first shot.",
+      "Ones shoots… 8 times 7 is 56!",
+      "A player can only bank ONE digit. Bank the 6…",
+      "…and pass the 5 as an ASSIST to the tens player.",
+      "Tens is the last player: 8 times 4 is 32… now ADD the assist: 32 plus 5 is 37!",
+      "The last player doesn't pass — they DUNK the whole number. SLAM!",
+      "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!",
+    ];
+
+    const canMp4 = window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported("audio/mp4");
+    if (!canMp4) document.getElementById("warn").style.display = "block";
+
+    let stream = null;
+    async function getStream() {
+      if (!stream) stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      return stream;
+    }
+
+    const cardsEl = document.getElementById("cards");
+    LINES.forEach((line, i) => {
+      const card = document.createElement("div");
+      card.className = "card";
+      card.innerHTML = `
+        <div class="num">CLIP ${i} — saves as coach-${i}.m4a</div>
+        <div class="line">“${line}”</div>
+        <div class="row">
+          <button class="rec" data-i="${i}">● Record</button>
+          <span class="status">not recorded</span>
+          <audio controls></audio>
+          <a class="dl" download="coach-${i}.m4a">⬇ Download</a>
+        </div>`;
+      cardsEl.appendChild(card);
+    });
+
+    let activeRecorder = null;
+    let activeButton = null;
+
+    document.querySelectorAll(".rec").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        // stop an in-progress recording (either this one or another card's)
+        if (activeRecorder && activeRecorder.state === "recording") {
+          activeRecorder.stop();
+          if (activeButton === btn) return;   // this click was the Stop
+        }
+        let s;
+        try { s = await getStream(); }
+        catch (e) { alert("Microphone permission is needed — allow it and try again."); return; }
+
+        const card = btn.closest(".card");
+        const status = card.querySelector(".status");
+        const audio = card.querySelector("audio");
+        const dl = card.querySelector(".dl");
+        const mime = canMp4 ? "audio/mp4" : (MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "");
+        const rec = mime ? new MediaRecorder(s, { mimeType: mime }) : new MediaRecorder(s);
+        const chunks = [];
+        rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        rec.onstop = () => {
+          const blob = new Blob(chunks, { type: rec.mimeType || "audio/mp4" });
+          const url = URL.createObjectURL(blob);
+          audio.src = url;
+          audio.style.display = "inline-block";
+          dl.href = url;
+          dl.style.display = "inline-block";
+          status.textContent = `recorded (${(blob.size / 1024).toFixed(0)} KB)`;
+          btn.textContent = "● Re-record";
+          btn.classList.remove("armed");
+          activeRecorder = null;
+          activeButton = null;
+        };
+        rec.start();
+        activeRecorder = rec;
+        activeButton = btn;
+        btn.textContent = "■ Stop";
+        btn.classList.add("armed");
+        status.textContent = "recording…";
+      });
+    });
+  </script>
+</body>
+</html>
