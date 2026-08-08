@@ -207,6 +207,7 @@ function el(tag, cls, text) {
 
 function renderHome() {
   G = null;
+  COACH = null;
   app.innerHTML = "";
   const home = el("div", "home");
 
@@ -237,6 +238,10 @@ function renderHome() {
   }
   home.appendChild(row);
 
+  const coachBtn = el("button", "coach-btn", "🎓 Coach's Clinic — how it works");
+  coachBtn.addEventListener("click", () => { sfx.select(); renderCoach(); });
+  home.appendChild(coachBtn);
+
   const toggleRow = el("div", "toggle-row");
   const toggle = el("button", "toggle" + (store.carryHelper ? " on" : ""));
   toggle.setAttribute("aria-label", "Toggle carry boxes");
@@ -252,6 +257,146 @@ function renderHome() {
 
   home.appendChild(el("div", "scupperlab", "A ScupperLab production"));
   app.appendChild(home);
+}
+
+/* ---------- Coach's Clinic: animated walkthrough of 485 × 8 ---------- */
+let COACH = null;
+
+function coachSpot(cols) {
+  const { topNodes, bNode } = COACH;
+  topNodes.forEach((nd, i) => {
+    nd.classList.toggle("spot", cols.includes(i));
+    nd.classList.toggle("dimmed", cols.length > 0 && !cols.includes(i) && nd.textContent !== "");
+  });
+  bNode.classList.toggle("spot", cols.length > 0);
+}
+
+function coachBank(i, digit) {
+  const cell = COACH.answerNodes[i];
+  cell.textContent = digit;
+  cell.classList.add("bank-in", "good");
+  sfx.tap();
+}
+
+function coachAssist(fromCol, toCol, digit) {
+  const fromR = COACH.topNodes[fromCol].getBoundingClientRect();
+  const toR = COACH.carryNodes[toCol].getBoundingClientRect();
+  const ball = el("div", "fly-ball assist-ball");
+  const x0 = fromR.left + fromR.width / 2 - 15, y0 = fromR.top + fromR.height / 2 - 15;
+  const x1 = toR.left + toR.width / 2 - 15, y1 = toR.top + toR.height / 2 - 15;
+  ball.style.left = x0 + "px";
+  ball.style.top = y0 + "px";
+  fxLayer.appendChild(ball);
+  const anim = ball.animate([
+    { transform: "translate(0,0) scale(1)" },
+    { transform: `translate(${(x1 - x0) * 0.5}px, ${Math.min(y1 - y0, 0) - 60}px) scale(.9)`, offset: 0.55 },
+    { transform: `translate(${x1 - x0}px, ${y1 - y0}px) scale(.8)` },
+  ], { duration: 650, easing: "cubic-bezier(.3,0,.7,1)" });
+  anim.onfinish = () => {
+    ball.remove();
+    const cNode = COACH.carryNodes[toCol];
+    cNode.textContent = digit;
+    cNode.classList.add("filled");
+    sfx.select();
+  };
+}
+
+const COACH_STEPS = [
+  { cap: "Every column is a player on your team. The ONES player always takes the first shot.",
+    run: () => coachSpot([3]) },
+  { cap: "Ones shoots… 8 × 5 = 40.", bubble: "8 × 5 = 40",
+    run: () => coachSpot([3]) },
+  { cap: "A player can only bank ONE digit. Bank the 0…", bubble: "40 → bank 0",
+    run: () => coachBank(3, "0") },
+  { cap: "…and pass the 4 as an ASSIST to the tens player.", bubble: "40 → bank 0, assist 4",
+    run: () => coachAssist(3, 2, "4") },
+  { cap: "Tens shoots… 8 × 8 = 64. Now ADD the assist: 64 + 4 = 68!", bubble: "8 × 8 = 64 + 4 = 68",
+    run: () => coachSpot([2]) },
+  { cap: "Bank the 8, pass the 6.", bubble: "68 → bank 8, assist 6",
+    run: () => { coachBank(2, "8"); coachAssist(2, 1, "6"); } },
+  { cap: "Hundreds is the LAST player… 8 × 4 = 32, plus the assist: 38!", bubble: "8 × 4 = 32 + 6 = 38",
+    run: () => coachSpot([1]) },
+  { cap: "The last player doesn't pass — they DUNK the whole number. SLAM!", bubble: "38 → dunk it all!",
+    run: () => { coachBank(1, "8"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
+  { cap: "485 × 8 = 3880. Shoot right to left, and ALWAYS add the assist. Your ball now!", bubble: "3880 🏀",
+    run: () => sfx.cheer() },
+];
+
+function coachNext() {
+  if (!COACH) return;
+  COACH.step++;
+  if (COACH.step >= COACH_STEPS.length) { COACH = null; renderHome(); return; }
+  const s = COACH_STEPS[COACH.step];
+  COACH.caption.textContent = s.cap;
+  if (s.bubble) { COACH.bubble.textContent = s.bubble; COACH.bubble.style.visibility = "visible"; }
+  s.run();
+  if (COACH.step === COACH_STEPS.length - 1) {
+    COACH.nextBtn.textContent = "Got it — let's play! 🏀";
+    const replay = el("button", "big-btn secondary", "↺ Watch again");
+    replay.addEventListener("click", () => { sfx.tap(); renderCoach(); });
+    COACH.nextBtn.parentElement.appendChild(replay);
+  }
+}
+
+function renderCoach() {
+  G = null;
+  COACH = null;
+  app.innerHTML = "";
+  const wrap = el("div", "coach");
+
+  const back = el("button", "coach-back", "✕");
+  back.setAttribute("aria-label", "Back to home");
+  back.addEventListener("click", () => { COACH = null; sfx.tap(); renderHome(); });
+  wrap.appendChild(back);
+
+  wrap.appendChild(el("h2", "coach-title", "Coach's Clinic 🏀"));
+  const caption = el("div", "coach-caption");
+  wrap.appendChild(caption);
+  const bubble = el("div", "calc-bubble");
+  bubble.style.visibility = "hidden";
+  bubble.textContent = "—";
+  wrap.appendChild(bubble);
+
+  const card = el("div", "problem-card coach-card");
+  const grid = el("div", "digit-grid");
+  const n = 4;
+  grid.style.gridTemplateColumns = `repeat(${n}, auto)`;
+  const carryNodes = [], topNodes = [], answerNodes = [];
+  for (let i = 0; i < n; i++) {
+    const c = el("div", "carry-cell" + (i === n - 1 ? " hidden-cell" : ""));
+    carryNodes.push(c);
+    grid.appendChild(c);
+  }
+  const aStr = "485";
+  for (let i = 0; i < n; i++) {
+    const d = el("div", "top-digit", i === 0 ? "" : aStr[i - 1]);
+    topNodes.push(d);
+    grid.appendChild(d);
+  }
+  let bNode = null;
+  for (let i = 0; i < n; i++) {
+    if (i === 0) grid.appendChild(el("div", "times-sign", "×"));
+    else if (i === n - 1) { bNode = el("div", "bottom-digit", "8"); grid.appendChild(bNode); }
+    else grid.appendChild(el("div", "bottom-digit", ""));
+  }
+  grid.appendChild(el("div", "rule-line"));
+  for (let i = 0; i < n; i++) {
+    const cell = el("div", "answer-cell");
+    answerNodes.push(cell);
+    grid.appendChild(cell);
+  }
+  card.appendChild(grid);
+  wrap.appendChild(card);
+
+  const controls = el("div", "coach-controls");
+  const nextBtn = el("button", "shoot-btn coach-next", "Next ▶");
+  nextBtn.addEventListener("click", () => { sfx.tap(); coachNext(); });
+  controls.appendChild(nextBtn);
+  wrap.appendChild(controls);
+
+  app.appendChild(wrap);
+  COACH = { step: -1, caption, bubble, carryNodes, topNodes, answerNodes, bNode, nextBtn };
+  coachNext();
 }
 
 function renderGame() {
@@ -674,7 +819,12 @@ function endRound() {
 
 /* ---------- keyboard support (handy on desktop) ---------- */
 document.addEventListener("keydown", (e) => {
-  if (!G || G.idx >= ROUND_LEN || e.repeat) return;
+  if (e.repeat) return;
+  if (COACH) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); coachNext(); }
+    return;
+  }
+  if (!G || G.idx >= ROUND_LEN) return;
   if (/^[0-9]$/.test(e.key)) onKey(e.key);
   else if (e.key === "Backspace") { e.preventDefault(); onKey("⌫"); }
   else if (e.key === "Enter") onShoot();

@@ -437,6 +437,75 @@ button {
   .numpad { grid-template-columns: repeat(3, 78px); grid-auto-rows: 72px; }
 }
 
+/* ---------- Coach's Clinic ---------- */
+.coach {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 14px;
+}
+.coach-back {
+  position: absolute;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 14px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--paper);
+}
+.coach-title { font-size: clamp(24px, 4vh, 34px); text-shadow: 0 3px 0 rgba(0, 0, 0, 0.3); }
+.coach-caption {
+  min-height: 62px;
+  max-width: 660px;
+  text-align: center;
+  font-size: clamp(18px, 3vh, 24px);
+  font-weight: bold;
+  line-height: 1.3;
+}
+.calc-bubble {
+  background: var(--gold);
+  color: var(--ink);
+  font-weight: bold;
+  font-size: clamp(18px, 3vh, 24px);
+  padding: 8px 22px;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+.coach-btn {
+  padding: 12px 24px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--paper);
+  font-size: clamp(15px, 2.2vw, 18px);
+  font-weight: bold;
+}
+.coach-btn:active { transform: scale(0.97); }
+.top-digit, .bottom-digit { transition: transform 0.25s, opacity 0.25s, color 0.25s; }
+.spot { color: var(--ball-dark); transform: scale(1.18); }
+.dimmed { opacity: 0.3; }
+.bank-in { animation: bankdrop 0.45s cubic-bezier(0.2, 1.6, 0.4, 1); }
+@keyframes bankdrop {
+  from { transform: translateY(-46px) scale(0.6); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+.assist-ball { width: 30px; height: 30px; }
+.carry-cell.filled {
+  background: #fff3e5;
+  border-style: solid;
+  border-color: var(--ball);
+  animation: bankdrop 0.35s;
+}
+.coach-controls { display: flex; gap: 14px; align-items: center; }
+.coach-next { max-width: 340px; padding: 12px 28px; }
+
 /* ---------- flying ball & fx ---------- */
 .fx-layer {
   position: fixed;
