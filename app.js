@@ -301,34 +301,72 @@ function coachAssist(fromCol, toCol, digit) {
   };
 }
 
+/* Coach voiceover via the browser's built-in speech (offline, no audio files).
+   Prefers an Australian English voice when the device has one. */
+let COACH_VOICE = null;
+function pickVoice() {
+  if (!("speechSynthesis" in window)) return null;
+  const vs = speechSynthesis.getVoices();
+  return vs.find((v) => v.lang === "en-AU")
+      || vs.find((v) => v.lang && v.lang.replace("_", "-").startsWith("en-AU"))
+      || vs.find((v) => v.lang && v.lang.startsWith("en"))
+      || null;
+}
+if ("speechSynthesis" in window) {
+  try {
+    speechSynthesis.addEventListener("voiceschanged", () => { COACH_VOICE = pickVoice(); });
+  } catch (e) { /* older Safari */ }
+  COACH_VOICE = pickVoice();
+}
+function speak(text) {
+  if (store.muted || !("speechSynthesis" in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    if (!COACH_VOICE) COACH_VOICE = pickVoice();
+    if (COACH_VOICE) u.voice = COACH_VOICE;
+    u.rate = 0.98;
+    u.pitch = 1.05;
+    speechSynthesis.speak(u);
+  } catch (e) { /* captions still carry the lesson */ }
+}
+function hushCoach() {
+  if ("speechSynthesis" in window) { try { speechSynthesis.cancel(); } catch (e) {} }
+}
+
+/* Worked example: 47 × 8 = 376 — one assist, then the dunk. Grid: 3 columns. */
 const COACH_STEPS = [
   { cap: "Every column is a player on your team. The ONES player always takes the first shot.",
-    run: () => coachSpot([3]) },
-  { cap: "Ones shoots… 8 × 5 = 40.", bubble: "8 × 5 = 40",
-    run: () => coachSpot([3]) },
-  { cap: "A player can only bank ONE digit. Bank the 0…", bubble: "40 → bank 0",
-    run: () => coachBank(3, "0") },
-  { cap: "…and pass the 4 as an ASSIST to the tens player.", bubble: "40 → bank 0, assist 4",
-    run: () => coachAssist(3, 2, "4") },
-  { cap: "Tens shoots… 8 × 8 = 64. Now ADD the assist: 64 + 4 = 68!", bubble: "8 × 8 = 64 + 4 = 68",
+    say: "Every column is a player on your team. The ones player always takes the first shot.",
     run: () => coachSpot([2]) },
-  { cap: "Bank the 8, pass the 6.", bubble: "68 → bank 8, assist 6",
-    run: () => { coachBank(2, "8"); coachAssist(2, 1, "6"); } },
-  { cap: "Hundreds is the LAST player… 8 × 4 = 32, plus the assist: 38!", bubble: "8 × 4 = 32 + 6 = 38",
+  { cap: "Ones shoots… 8 × 7 = 56!", bubble: "8 × 7 = 56",
+    say: "Ones shoots. 8 times 7 is 56!",
+    run: () => coachSpot([2]) },
+  { cap: "A player can only bank ONE digit. Bank the 6…", bubble: "56 → bank 6",
+    say: "A player can only bank one digit. Bank the 6.",
+    run: () => coachBank(2, "6") },
+  { cap: "…and pass the 5 as an ASSIST to the tens player.", bubble: "56 → bank 6, assist 5",
+    say: "And pass the 5 as an assist to the tens player.",
+    run: () => coachAssist(2, 1, "5") },
+  { cap: "Tens is the LAST player: 8 × 4 = 32… now ADD the assist: 32 + 5 = 37!", bubble: "8 × 4 = 32 + 5 = 37",
+    say: "Tens is the last player. 8 times 4 is 32. Now add the assist: 32 plus 5 is 37!",
     run: () => coachSpot([1]) },
-  { cap: "The last player doesn't pass — they DUNK the whole number. SLAM!", bubble: "38 → dunk it all!",
-    run: () => { coachBank(1, "8"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
-  { cap: "485 × 8 = 3880. Shoot right to left, and ALWAYS add the assist. Your ball now!", bubble: "3880 🏀",
+  { cap: "The last player doesn't pass — they DUNK the whole number. SLAM!", bubble: "37 → dunk it all!",
+    say: "The last player doesn't pass. They dunk the whole number. Slam!",
+    run: () => { coachBank(1, "7"); coachBank(0, "3"); coachSpot([]); sfx.swish(); } },
+  { cap: "47 × 8 = 376. Shoot right to left, and ALWAYS add the assist. Your ball now!", bubble: "376 🏀",
+    say: "47 times 8 is 376. Shoot right to left, and always add the assist. Your ball now!",
     run: () => sfx.cheer() },
 ];
 
 function coachNext() {
   if (!COACH) return;
   COACH.step++;
-  if (COACH.step >= COACH_STEPS.length) { COACH = null; renderHome(); return; }
+  if (COACH.step >= COACH_STEPS.length) { COACH = null; hushCoach(); renderHome(); return; }
   const s = COACH_STEPS[COACH.step];
   COACH.caption.textContent = s.cap;
   if (s.bubble) { COACH.bubble.textContent = s.bubble; COACH.bubble.style.visibility = "visible"; }
+  speak(s.say || s.cap);
   s.run();
   if (COACH.step === COACH_STEPS.length - 1) {
     COACH.nextBtn.textContent = "Got it — let's play! 🏀";
@@ -346,7 +384,7 @@ function renderCoach() {
 
   const back = el("button", "coach-back", "✕");
   back.setAttribute("aria-label", "Back to home");
-  back.addEventListener("click", () => { COACH = null; sfx.tap(); renderHome(); });
+  back.addEventListener("click", () => { COACH = null; hushCoach(); sfx.tap(); renderHome(); });
   wrap.appendChild(back);
 
   wrap.appendChild(el("h2", "coach-title", "Coach's Clinic 🏀"));
@@ -359,7 +397,7 @@ function renderCoach() {
 
   const card = el("div", "problem-card coach-card");
   const grid = el("div", "digit-grid");
-  const n = 4;
+  const n = 3;
   grid.style.gridTemplateColumns = `repeat(${n}, auto)`;
   const carryNodes = [], topNodes = [], answerNodes = [];
   for (let i = 0; i < n; i++) {
@@ -367,7 +405,7 @@ function renderCoach() {
     carryNodes.push(c);
     grid.appendChild(c);
   }
-  const aStr = "485";
+  const aStr = "47";
   for (let i = 0; i < n; i++) {
     const d = el("div", "top-digit", i === 0 ? "" : aStr[i - 1]);
     topNodes.push(d);
@@ -835,6 +873,7 @@ const muteBtn = document.getElementById("mute-btn");
 function paintMute() { muteBtn.textContent = store.muted ? "🔇" : "🔊"; }
 muteBtn.addEventListener("click", () => {
   store.muted = !store.muted;
+  if (store.muted) hushCoach();
   saveStore();
   paintMute();
   if (!store.muted) sfx.tap();
