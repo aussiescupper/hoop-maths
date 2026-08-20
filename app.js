@@ -1,6 +1,8 @@
 /* ============ Hoop Maths ============
-   Vertical multiplication practice (2-digit × 1-digit and 3-digit × 1-digit)
-   with carrying, styled as a basketball shootaround.
+   Multiplication practice styled as a basketball shootaround: vertical
+   2-digit and 3-digit × 1-digit with carrying, 2-digit × 2-digit with a zero
+   placeholder, a horizontal-partitioning task box, and the Magic Digits
+   problem-solving puzzles.
    A ScupperLab production — vanilla JS, no dependencies, offline-first. */
 
 "use strict";
@@ -183,7 +185,7 @@ function makeDoubleProblem() {
   for (let tries = 0; tries < 60; tries++) {
     const a = randInt(12, 99);
     // ~35% of multipliers are a round ten (22 x 30) - the gentlest way in
-    const b = Math.random() < 0.35 ? randInt(2, 9) * 10 : randInt(11, 99);
+    const b = Math.random() < 0.12 ? randInt(2, 9) * 10 : randInt(11, 99);
     if (b % 10 === 1 && Math.random() < 0.6) continue;    // x1 in the ones is a freebie
     const ones = b % 10, tens = Math.floor(b / 10);
     const pp1 = a * ones;
@@ -270,7 +272,7 @@ function isDouble(p) { return p.nDigits === 22; }
 // how many grid columns the sum needs (col 0 also carries the x sign)
 function gridCols() {
   const p = curProblem();
-  return isDouble(p) ? 5 : p.nDigits + 1;
+  return isDouble(p) ? 4 : p.nDigits + 1;
 }
 
 // every editable row of the algorithm, top to bottom
@@ -279,7 +281,7 @@ function rowSpecs() {
   if (!isDouble(p)) return [{ value: p.product, label: "" }];
   return [
     { value: p.pp1, label: `${p.a} × ${p.ones}` },
-    { value: p.pp2, label: `${p.a} × ${p.tens}0` },
+    { value: p.pp2, label: `${p.a} × ${p.tens}0`, zeroPlaceholder: true },
     { value: p.product, label: "add" },
   ];
 }
@@ -725,7 +727,12 @@ function renderGame() {
   const padZone = el("div", "pad-zone");
   const fb = el("div", "feedback-line");
   fb.id = "feedback";
-  if (G.firstProblem && G.idx === 0) fb.textContent = "Start with the ones column ➜ tap digits below";
+  if (G.firstProblem && G.idx === 0) {
+    const cp = curProblem();
+    fb.textContent = isDouble(cp)
+      ? `Line 2 starts with a 0 placeholder — tap "↓ Next line" between lines`
+      : "Start with the ones column ➜ tap digits below";
+  }
   padZone.appendChild(fb);
   padZone.appendChild(buildNumpad());
   if (rowCount() > 1) {
@@ -761,6 +768,8 @@ function buildProblemCard() {
   G.rows = Array.from({ length: nRows }, () => Array(n).fill(""));
   G.carries = Array(n).fill("");
   G.active = { kind: "answer", r: 0, i: n - 1 };
+  G.lastRow = 0;
+  G.justAdvanced = false;
   G.attempt = 1;
   G.revealed = false;
   G.awaitNext = null;                 // null | "auto" (basket) | "manual" (revealed miss)
@@ -804,6 +813,8 @@ function buildProblemCard() {
     for (let i = 0; i < n; i++) {
       const cell = el("div", "answer-cell");
       cell.dataset.kind = "answer"; cell.dataset.r = String(r); cell.dataset.i = String(i);
+      // the tens line always starts with a 0 in the ones column — ghost it so he copies it
+      if (specs[r].zeroPlaceholder && i === n - 1) cell.classList.add("ph-zero");
       cell.addEventListener("click", () => selectCell("answer", r, i));
       grid.appendChild(cell);
     }
@@ -830,9 +841,21 @@ function cellNode(kind, r, i) {
   return app.querySelector(`[data-kind="${kind}"][data-r="${r}"][data-i="${i}"]`);
 }
 
+function setActiveAnswer(r, i) {
+  G.active = { kind: "answer", r, i };
+  G.lastRow = r;
+  G.justAdvanced = false;
+}
+
 function selectCell(kind, r, i) {
   if (G.revealed) return;
-  G.active = { kind, r, i };
+  if (kind === "answer") { setActiveAnswer(r, i); }
+  else {
+    // remember the line he came from so the caret can return to it
+    if (G.active && G.active.kind === "answer") G.lastRow = G.active.r;
+    G.active = { kind, r, i };
+    G.justAdvanced = false;
+  }
   paintActive();
   sfx.select();
 }
@@ -862,13 +885,14 @@ function advanceRow() {
   if (!G || G.revealed) return;
   const n = gridCols();
   const nRows = rowCount();
-  const r = G.active ? G.active.r : 0;
-  const cur = typeof r === "number" ? r : 0;
+  if (G.justAdvanced) { G.justAdvanced = false; paintActive(); return; }  // already dropped a line
+  const cur = (G.active && typeof G.active.r === "number") ? G.active.r
+            : (typeof G.lastRow === "number" ? G.lastRow : 0);
   if (cur >= nRows - 1) {
     setFeedback("That's the last line — hit SHOOT when you're happy", "");
     return;
   }
-  G.active = { kind: "answer", r: cur + 1, i: n - 1 };
+  setActiveAnswer(cur + 1, n - 1);
   paintActive();
 }
 
@@ -891,7 +915,7 @@ function onKey(k) {
       clearMarks();
       setFeedback("Cleared — press C again to undo", "");
     }
-    G.active = { kind: "answer", r: 0, i: n - 1 };
+    setActiveAnswer(0, n - 1);
     paintActive();
     sfx.tap();
     return;
@@ -904,10 +928,10 @@ function onKey(k) {
     if (kind === "answer" && G.rows[r][i] === "" && i === n - 1 && r > 0) {
       const prev = r - 1;                            // empty ones cell: hop up a line
       const j = G.rows[prev].findIndex((v) => v !== "");
-      G.active = { kind: "answer", r: prev, i: j >= 0 ? j : n - 1 };
+      setActiveAnswer(prev, j >= 0 ? j : n - 1);
       if (j >= 0) setCell("answer", prev, j, "");
     } else if (kind === "answer" && G.rows[r][i] === "" && i < n - 1) {
-      G.active = { kind: "answer", r, i: i + 1 };   // step back toward the ones column
+      setActiveAnswer(r, i + 1);                     // step back toward the ones column
       setCell("answer", r, i + 1, "");
     } else {
       setCell(kind, r, i, "");
@@ -925,14 +949,16 @@ function onKey(k) {
   if (cur) cur.classList.remove("good", "bad");
   if (kind === "answer") {
     if (i > 0) {
-      G.active = { kind: "answer", r, i: i - 1 };
+      setActiveAnswer(r, i - 1);
     } else if (r < nRows - 1) {
-      G.active = { kind: "answer", r: r + 1, i: n - 1 };   // drop to the next line of working
+      setActiveAnswer(r + 1, n - 1);                       // drop to the next line of working
+      G.justAdvanced = true;                               // so "Next line" doesn't skip a line
     }
   } else {
-    // carry scratch: return to the rightmost unfinished answer cell in the top row
-    const j = rightmostEmptyAnswer(0);
-    G.active = { kind: "answer", r: 0, i: j >= 0 ? j : i };
+    // carry scratch: return to the rightmost unfinished cell of the line he came from
+    const back = typeof G.lastRow === "number" ? G.lastRow : 0;
+    const j = rightmostEmptyAnswer(back);
+    setActiveAnswer(back, j >= 0 ? j : n - 1);
   }
   paintActive();
   sfx.tap();
@@ -982,7 +1008,10 @@ function onShoot() {
       // unused leading cells may be empty or a written 0 — both are correct
       const ok = i < pad ? (G.rows[r][i] === "" || G.rows[r][i] === "0") : G.rows[r][i] === expected[i];
       if (!ok) allGood = false;
-      if (node) { node.classList.remove("good", "bad"); node.classList.add(ok ? "good" : "bad"); }
+      if (node) {
+        node.classList.remove("good", "bad");
+        if (G.rows[r][i] !== "" || !ok) node.classList.add(ok ? "good" : "bad");   // blanks stay unmarked
+      }
     }
   }
 
@@ -1041,9 +1070,10 @@ function showWorking() {
   if (isDouble(p)) {
     w.innerHTML = [
       `Split the <b>${p.b}</b> into <b>${p.tens}0</b> and <b>${p.ones}</b>.`,
-      `<b>${p.a} × ${p.ones}</b> = <b>${p.pp1}</b> &nbsp;(first line)`,
-      `<b>${p.a} × ${p.tens}0</b> = ${p.a} × ${p.tens} = ${p.a * p.tens}, then × 10 → <b>${p.pp2}</b> &nbsp;(second line)`,
-      `Add them: ${p.pp1} + ${p.pp2} = <b>${p.product}</b>`,
+      `Line 1 &nbsp; <b>${p.a} × ${p.ones}</b> = <b>${p.pp1}</b>`,
+      `Line 2 &nbsp; that ${p.tens} is really <b>${p.tens}0</b>, so <b>write a 0 in the ones column first</b> — ` +
+        `that's the placeholder. Then ${p.a} × ${p.tens} = ${p.a * p.tens}, which gives <b>${p.pp2}</b>.`,
+      `Add the lines: ${p.pp1} + ${p.pp2} = <b>${p.product}</b>`,
     ].join("<br>");
     card.appendChild(w);
     return;
@@ -1218,6 +1248,7 @@ function hxWorkedExample(ex) {
 }
 
 function hxSetTab(tab) {
+  if (HX) { HX.practiceChecked = HX.tab === "practice" ? HX.practiceChecked : false; }
   HX.tab = tab;
   renderHorizontal(tab);
 }
@@ -1226,14 +1257,27 @@ function renderHorizontal(tab = "learn") {
   G = null; COACH = null; MD = null;
   hushCoach();
   const keep = HX && HX.tab === tab ? HX : null;
-  HX = keep || { tab, q: null, cells: [], active: 0, checked: false, testIdx: 0, testScore: 0, testDone: false, q2: null, val: "" };
+  HX = keep || { tab, q: null, cells: [], active: 0, practiceChecked: false, testChecked: false, testIdx: 0, testScore: 0, testDone: false, q2: null, val: "" };
   HX.tab = tab;
   app.innerHTML = "";
 
   const wrap = el("div", "hx");
   const back = el("button", "coach-back", "✕");
   back.setAttribute("aria-label", "Back to home");
-  back.addEventListener("click", () => { sfx.tap(); renderHome(); });
+  back.addEventListener("click", () => {
+    if (!back.dataset.arm) {
+      back.dataset.arm = "1";
+      back.textContent = "Leave?";
+      back.classList.add("wide");
+      setTimeout(() => {
+        if (back.isConnected) { delete back.dataset.arm; back.textContent = "✕"; back.classList.remove("wide"); }
+      }, 2200);
+      sfx.tap();
+      return;
+    }
+    sfx.tap();
+    renderHome();
+  });
   wrap.appendChild(back);
 
   wrap.appendChild(el("h2", "coach-title", "Horizontal Multiplication 📐"));
@@ -1271,10 +1315,10 @@ function hxRenderLearn(body) {
 }
 
 function hxNewPractice() {
-  HX.q = hxMakeQuestion(false);
+  HX.q = hxMakeQuestion(true);
   HX.cells = ["", "", ""];
   HX.active = 0;
-  HX.checked = false;
+  HX.practiceChecked = false;
 }
 
 function hxRenderPractice(body) {
@@ -1291,47 +1335,59 @@ function hxRenderPractice(body) {
     const box = el("div", "hx-box" + (HX.active === idx ? " active" : ""), HX.cells[idx]);
     box.dataset.hx = String(idx);
     box.addEventListener("click", () => { HX.active = idx; sfx.select(); renderHorizontal("practice"); });
-    if (HX.checked) box.classList.add(String(expected) === HX.cells[idx] ? "good" : "bad");
+    if (HX.practiceChecked) box.classList.add(String(expected) === HX.cells[idx] ? "good" : "bad");
     row.appendChild(box);
     grid.appendChild(row);
   };
-  mk(`${s.tens} × ${b} =`, 0, s.tensPart);
-  mk(`${s.ones} × ${b} =`, 1, s.onesPart);
-  mk(`add them =`, 2, s.total);
+  if (b % 10 === 0) {
+    const t = b / 10;
+    mk(`${a} × ${t} =`, 0, a * t);
+    mk(`then × 10 =`, 1, a * b);
+    mk(`so ${a} × ${b} =`, 2, a * b);
+  } else {
+    mk(`${s.tens} × ${b} =`, 0, s.tensPart);
+    mk(`${s.ones} × ${b} =`, 1, s.onesPart);
+    mk(`add them =`, 2, s.total);
+  }
   body.appendChild(grid);
+
+  const want = b % 10 === 0
+    ? [String(a * (b / 10)), String(a * b), String(a * b)]
+    : [String(s.tensPart), String(s.onesPart), String(s.total)];
 
   const fb = el("div", "feedback-line");
   fb.id = "hx-feedback";
-  if (HX.checked) {
-    const ok = HX.cells[0] === String(s.tensPart) && HX.cells[1] === String(s.onesPart) && HX.cells[2] === String(s.total);
+  if (HX.practiceChecked) {
+    const ok = want.every((v, i) => HX.cells[i] === v);
     fb.textContent = ok ? "Nailed it! 🏀" : "Not yet — check the red ones";
     fb.className = "feedback-line " + (ok ? "good" : "bad");
   }
   body.appendChild(fb);
 
   body.appendChild(hxNumpad((k) => {
-    if (HX.checked) return;
-    if (k === "⌫") HX.cells[HX.active] = HX.cells[HX.active].slice(0, -1);
+    if (HX.practiceChecked) return;
+    if (k === "C") HX.cells[HX.active] = "";
+    else if (k === "⌫") HX.cells[HX.active] = HX.cells[HX.active].slice(0, -1);
     else if (HX.cells[HX.active].length < 4) HX.cells[HX.active] += k;
     sfx.tap();
     renderHorizontal("practice");
   }));
 
   const btns = el("div", "hx-btns");
-  const check = el("button", "big-btn primary", HX.checked ? "Next one ▶" : "Check");
+  const check = el("button", "big-btn primary", HX.practiceChecked ? "Next one ▶" : "Check");
   check.addEventListener("click", () => {
-    if (HX.checked) { hxNewPractice(); sfx.select(); }
+    if (HX.practiceChecked) { hxNewPractice(); sfx.select(); }
     else {
-      HX.checked = true;
-      const ok = HX.cells[0] === String(s.tensPart) && HX.cells[1] === String(s.onesPart) && HX.cells[2] === String(s.total);
+      HX.practiceChecked = true;
+      const ok = want.every((v, i) => HX.cells[i] === v);
       ok ? sfx.swish() : sfx.rim();
     }
     renderHorizontal("practice");
   });
   const show = el("button", "big-btn secondary", "Show me");
   show.addEventListener("click", () => {
-    HX.cells = [String(s.tensPart), String(s.onesPart), String(s.total)];
-    HX.checked = true;
+    HX.cells = [...want];
+    HX.practiceChecked = true;
     sfx.tap();
     renderHorizontal("practice");
   });
@@ -1353,17 +1409,17 @@ function hxRenderTest(body) {
     body.appendChild(again);
     return;
   }
-  if (!HX.q2) { HX.q2 = hxMakeQuestion(true); HX.val = ""; HX.checked = false; }
+  if (!HX.q2) { HX.q2 = hxMakeQuestion(true); HX.val = ""; HX.testChecked = false; }
   const { a, b } = HX.q2;
 
   body.appendChild(el("div", "hx-progress", `Question ${HX.testIdx + 1} of ${HX_TEST_LEN}  ·  Score ${HX.testScore}`));
   body.appendChild(el("div", "hx-eq big", `${a} × ${b} =`));
 
-  const box = el("div", "hx-box wide" + (HX.checked ? (HX.val === String(a * b) ? " good" : " bad") : " active"), HX.val);
+  const box = el("div", "hx-box wide" + (HX.testChecked ? (HX.val === String(a * b) ? " good" : " bad") : " active"), HX.val);
   body.appendChild(box);
 
   const fb = el("div", "feedback-line");
-  if (HX.checked) {
+  if (HX.testChecked) {
     const ok = HX.val === String(a * b);
     fb.textContent = ok ? "Correct! 🏀" : `Not quite — it's ${a * b}`;
     fb.className = "feedback-line " + (ok ? "good" : "bad");
@@ -1371,18 +1427,19 @@ function hxRenderTest(body) {
   body.appendChild(fb);
 
   body.appendChild(hxNumpad((k) => {
-    if (HX.checked) return;
-    if (k === "⌫") HX.val = HX.val.slice(0, -1);
+    if (HX.testChecked) return;
+    if (k === "C") HX.val = "";
+    else if (k === "⌫") HX.val = HX.val.slice(0, -1);
     else if (HX.val.length < 5) HX.val += k;
     sfx.tap();
     renderHorizontal("test");
   }));
 
-  const btn = el("button", "big-btn primary", HX.checked ? (HX.testIdx + 1 >= HX_TEST_LEN ? "See my score" : "Next ▶") : "Check");
+  const btn = el("button", "big-btn primary", HX.testChecked ? (HX.testIdx + 1 >= HX_TEST_LEN ? "See my score" : "Next ▶") : "Check");
   btn.addEventListener("click", () => {
-    if (!HX.checked) {
-      if (HX.val === "") return;
-      HX.checked = true;
+    if (!HX.testChecked) {
+      if (HX.val === "") { sfx.miss(); return; }
+      HX.testChecked = true;
       if (HX.val === String(a * b)) { HX.testScore++; sfx.swish(); } else sfx.rim();
     } else {
       HX.testIdx++;
@@ -1399,7 +1456,7 @@ function hxNumpad(onTap) {
   const pad = el("div", "numpad hx-numpad");
   ["1","2","3","4","5","6","7","8","9","⌫","0","C"].forEach((k) => {
     const btn = el("button", "key" + (k === "C" || k === "⌫" ? " util" : ""), k);
-    btn.addEventListener("click", () => onTap(k === "C" ? "⌫" : k));
+    btn.addEventListener("click", () => onTap(k));
     pad.appendChild(btn);
   });
   return pad;
@@ -1427,7 +1484,7 @@ function mdMakePuzzle(allowImpossible) {
     const digits = [Math.floor(a / 10), a % 10, b];
     if (allowImpossible && Math.random() < 0.25) {
       // nudge the target so no arrangement can work — the teacher's "some don't work" case
-      for (const delta of [1, -1, 2, -2, 3]) {
+      for (const delta of shuffled([3, -3, 4, -4, 5, -5, 6, -6, 7, -7, 8, -8, 9, -9])) {
         const t = target + delta;
         if (t > 9 && mdSolutions(digits, t).length === 0) {
           return { digits: shuffled(digits), target: t, possible: false };
@@ -1451,8 +1508,21 @@ function shuffled(arr) {
 
 function mdHint(p) {
   const ones = p.target % 10;
-  return `The answer ends in <b>${ones}</b>. Ask yourself: which of your digits, times another, could leave a <b>${ones}</b> in the ones column? ` +
-         `Remember × 5 always ends in 0 or 5, and any × an even number ends even.`;
+  const pairs = [];
+  for (const x of p.digits) for (const y of p.digits) {
+    if ((x * y) % 10 === ones && !pairs.some(([a, b]) => a === y && b === x)) pairs.push([x, y]);
+  }
+  const lines = [`Work on the <b>ones column</b> first. The answer ends in <b>${ones}</b>.`];
+  if (pairs.length) {
+    lines.push(`Of your digits, only ${pairs.map(([x, y]) => `<b>${x} × ${y}</b>`).join(" or ")} ends in ${ones}. ` +
+               `So one of those has to be the ones digit and the multiplier.`);
+  } else {
+    lines.push(`Try every pair of your digits — none of them multiply to something ending in <b>${ones}</b>. ` +
+               `What does that tell you?`);
+  }
+  if (p.digits.includes(5)) lines.push(`Remember: anything <b>× 5</b> ends in 0 or 5.`);
+  if (p.digits.some((d) => d % 2 === 0)) lines.push(`Anything <b>× an even number</b> ends in an even digit.`);
+  return lines.join("<br>");
 }
 
 function renderMagic(fresh) {
@@ -1469,13 +1539,27 @@ function renderMagic(fresh) {
     MD.showHint = false;
     MD.msg = "";
     MD.correct = false;
+    MD.tries = 0;
   }
   app.innerHTML = "";
 
   const wrap = el("div", "md");
   const back = el("button", "coach-back", "✕");
   back.setAttribute("aria-label", "Back to home");
-  back.addEventListener("click", () => { sfx.tap(); renderHome(); });
+  back.addEventListener("click", () => {
+    if (!back.dataset.arm) {
+      back.dataset.arm = "1";
+      back.textContent = "Leave?";
+      back.classList.add("wide");
+      setTimeout(() => {
+        if (back.isConnected) { delete back.dataset.arm; back.textContent = "✕"; back.classList.remove("wide"); }
+      }, 2200);
+      sfx.tap();
+      return;
+    }
+    sfx.tap();
+    renderHome();
+  });
   wrap.appendChild(back);
 
   if (MD.done) {
@@ -1568,14 +1652,26 @@ function renderMagic(fresh) {
   } else {
     const check = el("button", "big-btn primary", "Check it");
     check.addEventListener("click", () => {
-      if (MD.slots.some((v) => v === null)) { sfx.miss(); return; }
+      if (MD.slots.some((v) => v === null)) {
+        MD.msg = "Put all three digits in first.";
+        MD.correct = false;
+        sfx.miss();
+        renderMagic();
+        return;
+      }
+      MD.tries = (MD.tries || 0) + 1;
       const a = p.digits[MD.slots[0]] * 10 + p.digits[MD.slots[1]];
       const b = p.digits[MD.slots[2]];
       MD.correct = a * b === p.target;
       MD.msg = MD.correct
         ? `Yes! ${a} × ${b} = ${p.target} 🏀`
         : `${a} × ${b} = ${a * b}, not ${p.target}. Try another arrangement.`;
-      if (MD.correct) { MD.checked = true; MD.score++; sfx.swish(); } else sfx.rim();
+      if (MD.correct) {
+        MD.checked = true;
+        if (MD.tries <= 2) MD.score++;                       // guessing your way there scores nothing
+        MD.msg += MD.tries <= 2 ? "" : " (no point — that took a few goes)";
+        sfx.swish();
+      } else sfx.rim();
       renderMagic();
     });
     btns.appendChild(check);
@@ -1583,13 +1679,18 @@ function renderMagic(fresh) {
     if (MD.idx >= 3) {
       const nope = el("button", "big-btn secondary", "It's impossible!");
       nope.addEventListener("click", () => {
-        MD.checked = true;
+        MD.tries = (MD.tries || 0) + 1;
         MD.correct = !p.possible;
-        MD.msg = p.possible
-          ? "It IS possible — there's an arrangement that works. Have another look."
-          : "Correct — this one can't be done! Great reasoning. 🏀";
-        if (MD.correct) MD.score++;
-        MD.correct ? sfx.swish() : sfx.rim();
+        if (MD.correct) {
+          MD.checked = true;
+          if (MD.tries <= 2) MD.score++;
+          MD.msg = "Correct — this one can't be done! Great reasoning. 🏀";
+          sfx.swish();
+        } else {
+          MD.msg = `Not this one — there IS an arrangement that works. ` +
+                   `Try the ones column: which digit × which could end in ${p.target % 10}?`;
+          sfx.rim();
+        }
         renderMagic();
       });
       btns.appendChild(nope);
@@ -1598,6 +1699,28 @@ function renderMagic(fresh) {
     const hint = el("button", "big-btn secondary", "Hint");
     hint.addEventListener("click", () => { MD.showHint = true; sfx.tap(); renderMagic(); });
     btns.appendChild(hint);
+
+    const skip = el("button", "big-btn secondary", "Show me");
+    skip.addEventListener("click", () => {
+      const sol = mdSolutions(p.digits, p.target)[0];
+      MD.checked = true;
+      MD.correct = false;
+      if (sol) {
+        MD.slots = sol.map((d) => p.digits.indexOf(d));
+        const used = new Set();
+        MD.slots = sol.map((d) => {
+          const idx = p.digits.findIndex((v, k) => v === d && !used.has(k));
+          used.add(idx);
+          return idx;
+        });
+        MD.msg = `${sol[0]}${sol[1]} × ${sol[2]} = ${p.target}`;
+      } else {
+        MD.msg = "This one genuinely can't be done — that was the catch!";
+      }
+      sfx.tap();
+      renderMagic();
+    });
+    btns.appendChild(skip);
   }
   wrap.appendChild(btns);
 
@@ -1619,7 +1742,8 @@ document.addEventListener("keydown", (e) => {
   if (/^[0-9]$/.test(e.key)) onKey(e.key);
   else if (e.key === "Backspace") { e.preventDefault(); onKey("⌫"); }
   else if (e.key === "Enter") {
-    if (G.active && rowCount() > 1 && G.active.r < rowCount() - 1) advanceRow();
+    const er = (G.active && typeof G.active.r === "number") ? G.active.r : (G.lastRow || 0);
+    if (rowCount() > 1 && er < rowCount() - 1) advanceRow();
     else onShoot();
   }
 });

@@ -648,7 +648,6 @@ button {
 
 /* ---------- gutter column (2-digit × 2-digit working) ---------- */
 .gutter {
-  font-family: var(--f-doc, inherit);
   font-size: 12px;
   color: #7a8794;
   text-align: right;
@@ -756,3 +755,19 @@ button {
   font-weight: bold;
 }
 .nextline-btn:active { transform: translateY(2px); }
+
+/* the zero placeholder in the tens partial product */
+.answer-cell.ph-zero:empty::before {
+  content: "0";
+  color: var(--ball);
+  opacity: .32;
+  font-weight: bold;
+}
+.answer-cell.ph-zero { border-style: dashed; border-color: var(--ball); }
+.answer-cell.ph-zero.good, .answer-cell.ph-zero.bad { border-style: solid; }
+
+/* back button must stay reachable on the scrollable task-box screens */
+.coach-back { position: fixed; z-index: 55; left: calc(14px + env(safe-area-inset-left)); }
+.coach-back.wide { width: auto; padding: 0 16px; border-radius: 24px; font-size: 15px; font-weight: bold; }
+/* iOS 44pt minimum on the tab strip */
+.hx-tab { min-height: 44px; }
