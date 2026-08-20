@@ -800,3 +800,64 @@ button {
 .wd-answer { display: flex; gap: 18px; align-items: flex-end; justify-content: center; }
 .wd-boxwrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .wd-boxwrap .hx-label { min-width: 0; font-size: 13px; opacity: .8; }
+
+/* progressive hint panel — compact so it never pushes the buttons off screen */
+.md-hint {
+  max-height: 26vh; overflow-y: auto;
+  font-size: clamp(13px, 1.9vh, 15px); line-height: 1.5;
+  max-width: 520px;
+}
+.md-hint-n {
+  display: inline-block; min-width: 18px; height: 18px; line-height: 18px;
+  border-radius: 50%; background: var(--ball); color: #fff;
+  font-size: 11px; text-align: center; margin-right: 5px; font-weight: bold;
+}
+.md-warn { margin-bottom: 2px; }
+
+/* ---------- Word Problems: schema strip, bar model, lesson ---------- */
+.wd-toprow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+.wd-how {
+  font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+  background: rgba(255,255,255,.14); color: var(--paper);
+}
+.wd-schema { display: flex; align-items: stretch; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.wd-slot {
+  background: rgba(255,255,255,.1); border: 2px solid rgba(255,255,255,.18);
+  border-radius: 12px; padding: 7px 12px; min-width: 92px; text-align: center;
+}
+.wd-slot.unknown { border-color: var(--gold); background: rgba(245,179,1,.14); }
+.wd-slot-label { font-size: 10px; letter-spacing: .09em; opacity: .75; }
+.wd-slot-val { font-size: clamp(19px, 3vh, 24px); font-weight: bold; }
+.wd-slot.unknown .wd-slot-val { color: var(--gold); }
+.wd-slot-sub { font-size: 10.5px; opacity: .6; }
+.wd-schema-sep { align-self: center; opacity: .45; font-size: 15px; }
+
+.wd-bar-wrap { width: 100%; max-width: 520px; text-align: center; }
+.wd-bar-total { font-size: 12.5px; opacity: .8; margin-bottom: 3px; }
+.wd-bar { display: flex; gap: 3px; justify-content: center; flex-wrap: wrap; }
+.wd-bar-part {
+  flex: 0 0 auto; min-width: 34px; padding: 7px 4px;
+  background: var(--ball); color: #fff; font-weight: bold; font-size: 14px;
+  border-radius: 5px;
+}
+.wd-bar-part.rem { background: var(--gold); color: var(--ink); }
+.wd-bar-part.more { background: rgba(255,255,255,.2); }
+.wd-bar-caption { font-size: 12.5px; opacity: .8; margin-top: 4px; }
+
+.wd-lesson {
+  background: var(--paper); color: var(--ink);
+  border-radius: 16px; box-shadow: var(--shadow);
+  padding: 16px 20px; max-width: 540px; width: 100%;
+  font-size: clamp(14px, 2.1vh, 16px); line-height: 1.55;
+  max-height: 62vh; overflow-y: auto;
+}
+.wd-lesson p { margin-bottom: 9px; }
+.wd-lesson-strip { display: flex; gap: 8px; justify-content: center; margin: 10px 0 12px; flex-wrap: wrap; }
+.wd-chipbox {
+  background: #eef3f7; border: 2px solid #cbd5e1; border-radius: 10px;
+  padding: 8px 10px; font-weight: bold; font-size: 13px; text-align: center; flex: 1 1 110px;
+}
+.wd-chipbox small { font-weight: normal; opacity: .7; font-size: 11px; }
+.wd-read { padding-left: 8px; border-left: 3px solid var(--ball); }
+.wd-hl { background: #fff3e5; padding: 2px 7px; border-radius: 5px; font-weight: bold; white-space: nowrap; }
+.wd-warn-note { background: #fdf6e3; border-radius: 9px; padding: 9px 12px; font-size: 13.5px; }

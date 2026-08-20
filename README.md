@@ -33,10 +33,13 @@ A ScupperLab production.
 - **🔍 Magic Digits** — place the given digits to complete the multiplication, in the
   style of the school's problem-solving cards. From puzzle 4 on, some genuinely
   cannot be done, and spotting those earns the point.
-- **📖 Word Problems** — worded division in two steps: first choose the number
-  sentence, then solve it. Sharing and grouping structures get equal billing
-  (grouping is the harder read), every answer reveals the matching times-table
-  fact, and the last two of eight are a remainder challenge.
+- **📖 Word Problems** — worded division taught with schema-based instruction and
+  the three-read routine. Opens with a short "How to read one" lesson: every
+  division story holds a TOTAL, a number of GROUPS and an amount IN EACH, two
+  given and one asked for. Each problem shows those three slots with the unknown
+  marked, asks for the number sentence before the answer, and reveals a bar model
+  plus the matching times-table fact. 30 story templates across sharing and
+  grouping; the last two of eight are a remainder challenge.
 
 ## Install on iPad
 

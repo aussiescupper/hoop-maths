@@ -1509,37 +1509,44 @@ function shuffled(arr) {
   return a;
 }
 
-function mdHint(p) {
+// Hints come in steps: a strategy nudge first, the narrowing last.
+// Asking for one should never feel like giving up.
+function mdHintSteps(p) {
   const ones = p.target % 10;
+  const steps = [`Work on the <b>ones column</b> first. The answer ends in <b>${ones}</b>, ` +
+                 `so the ones digit of your 2-digit number times the multiplier has to end in <b>${ones}</b>.`];
+
+  const rules = [];
+  if (p.digits.includes(5)) rules.push(`anything <b>× 5</b> ends in 0 or 5`);
+  if (p.digits.includes(0)) rules.push(`anything <b>× 0</b> is 0`);
+  if (p.digits.some((d) => d % 2 === 0)) rules.push(`anything <b>× an even number</b> ends in an even digit`);
+  if (rules.length) steps.push(`Rule of thumb: ${rules.join(", and ")}. Does that rule any of your digits out?`);
+  else steps.push(`Try each digit in turn as the multiplier and see which could give a <b>${ones}</b> in the ones.`);
+
   const pairs = [];
   for (const x of p.digits) for (const y of p.digits) {
-    if ((x * y) % 10 === ones && !pairs.some(([a, b]) => a === y && b === x)) pairs.push([x, y]);
+    if ((x * y) % 10 === ones && !pairs.some(([m, n]) => m === y && n === x)) pairs.push([x, y]);
   }
-  const lines = [`Work on the <b>ones column</b> first. The answer ends in <b>${ones}</b>.`];
-  if (pairs.length) {
-    lines.push(`Of your digits, only ${pairs.map(([x, y]) => `<b>${x} × ${y}</b>`).join(" or ")} ends in ${ones}. ` +
-               `So one of those has to be the ones digit and the multiplier.`);
-  } else {
-    lines.push(`Try every pair of your digits — none of them multiply to something ending in <b>${ones}</b>. ` +
-               `What does that tell you?`);
-  }
-  if (p.digits.includes(5)) lines.push(`Remember: anything <b>× 5</b> ends in 0 or 5.`);
-  if (p.digits.some((d) => d % 2 === 0)) lines.push(`Anything <b>× an even number</b> ends in an even digit.`);
-  return lines.join("<br>");
+  steps.push(pairs.length
+    ? `Of your digits, only ${pairs.map(([x, y]) => `<b>${x} × ${y}</b>`).join(" or ")} ends in <b>${ones}</b>. ` +
+      `So that pair has to be the ones digit and the multiplier — the third digit goes in the tens.`
+    : `No pair of your digits multiplies to something ending in <b>${ones}</b>. ` +
+      `If the ones column can't work, nothing can. What does that tell you?`);
+  return steps;
 }
 
 function renderMagic(fresh) {
   G = null; COACH = null; HX = null; WD = null;
   hushCoach();
   if (fresh || !MD) {
-    MD = { idx: 0, score: 0, done: false, puzzle: null, slots: [null, null, null], picked: null, checked: false, showHint: false };
+    MD = { idx: 0, score: 0, done: false, puzzle: null, slots: [null, null, null], picked: null, checked: false, hintLevel: 0 };
   }
   if (!MD.puzzle) {
-    MD.puzzle = mdMakePuzzle(MD.idx >= 3);
+    MD.puzzle = mdMakePuzzle(MD.idx >= 1);
     MD.slots = [null, null, null];
     MD.picked = null;
     MD.checked = false;
-    MD.showHint = false;
+    MD.hintLevel = 0;
     MD.msg = "";
     MD.correct = false;
     MD.tries = 0;
@@ -1580,6 +1587,7 @@ function renderMagic(fresh) {
   wrap.appendChild(el("h2", "coach-title", "Magic Digits 🔍"));
   wrap.appendChild(el("div", "md-progress", `Puzzle ${MD.idx + 1} of ${MD_LEN}  ·  Score ${MD.score}`));
   wrap.appendChild(el("div", "hx-sub", "Use the digits below to complete the multiplication."));
+  wrap.appendChild(el("div", "md-warn", "⚠️ Watch out — some of these can't be done at all."));
 
   // digit chips
   const chips = el("div", "md-chips");
@@ -1635,9 +1643,11 @@ function renderMagic(fresh) {
   }
   wrap.appendChild(fb);
 
-  if (MD.showHint && !MD.checked) {
-    const h = el("div", "working");
-    h.innerHTML = mdHint(p);
+  if (MD.hintLevel > 0 && !MD.checked) {
+    const steps = mdHintSteps(p);
+    const h = el("div", "working md-hint");
+    h.innerHTML = steps.slice(0, MD.hintLevel)
+      .map((t, i) => `<span class="md-hint-n">${i + 1}</span> ${t}`).join("<br>");
     wrap.appendChild(h);
   }
 
@@ -1679,7 +1689,7 @@ function renderMagic(fresh) {
     });
     btns.appendChild(check);
 
-    if (MD.idx >= 3) {
+    {
       const nope = el("button", "big-btn secondary", "It's impossible!");
       nope.addEventListener("click", () => {
         MD.tries = (MD.tries || 0) + 1;
@@ -1699,9 +1709,12 @@ function renderMagic(fresh) {
       btns.appendChild(nope);
     }
 
-    const hint = el("button", "big-btn secondary", "Hint");
-    hint.addEventListener("click", () => { MD.showHint = true; sfx.tap(); renderMagic(); });
-    btns.appendChild(hint);
+    const total = mdHintSteps(p).length;
+    if (MD.hintLevel < total) {
+      const hint = el("button", "big-btn secondary", MD.hintLevel === 0 ? "Hint" : `Another hint (${MD.hintLevel + 1}/${total})`);
+      hint.addEventListener("click", () => { MD.hintLevel++; sfx.tap(); renderMagic(); });
+      btns.appendChild(hint);
+    }
 
     const skip = el("button", "big-btn secondary", "Show me");
     skip.addEventListener("click", () => {
@@ -1727,10 +1740,6 @@ function renderMagic(fresh) {
   }
   wrap.appendChild(btns);
 
-  if (MD.idx >= 3 && !MD.checked) {
-    wrap.appendChild(el("div", "md-warn", "⚠️ Careful — from here on, some of these can't be done at all."));
-  }
-
   app.appendChild(wrap);
 }
 
@@ -1740,21 +1749,53 @@ const WD_LEN = 8;
 
 // SHARE = partitive ("shared between 4" -> how many each). GROUP = quotitive
 // ("teams of 4" -> how many teams). Grouping is the harder read, so it gets equal billing.
+// Schema-based instruction (Equal Groups): every division story holds a TOTAL,
+// a number of GROUPS and an amount IN EACH. Two are given, one is the question.
+//   share (partitive)  -> total and groups given, "in each" is unknown
+//   group (quotitive)  -> total and "in each" given, groups is unknown
+// remOk: the wording still makes sense when it does NOT divide evenly.
 const WD_TEMPLATES = [
-  // remOk: the wording still makes sense when it does NOT divide evenly
-  { kind: "share", remOk: false, t: (n, d) => `Henry has ${n} basketball cards. He shares them equally between ${d} friends.`,       q: () => `How many cards does each friend get?` },
-  { kind: "share", remOk: false, t: (n, d) => `The Hawks scored ${n} points. All ${d} players scored the same number.`,               q: () => `How many points did each player score?` },
-  { kind: "share", remOk: true,  t: (n, d) => `You have ${n} blocks of stone to split evenly between ${d} chests.`,                   q: () => `How many blocks go in each chest?` },
-  { kind: "share", remOk: false, t: (n, d) => `${n} Robux is shared equally between ${d} players.`,                                   q: () => `How many Robux does each player get?` },
-  { kind: "share", remOk: true,  t: (n, d) => `A packet of ${n} stickers is shared out between ${d} kids, as evenly as possible.`,    q: () => `How many stickers does each kid get?` },
-  { kind: "share", remOk: false, t: (n, d) => `A ${n} second song is split into ${d} equal parts.`,                                   q: () => `How long is each part, in seconds?` },
-  { kind: "group", remOk: true,  t: (n, d) => `${n} children turn up to basketball. Each team needs ${d} players.`,                   q: () => `How many full teams can they make?` },
-  { kind: "group", remOk: true,  t: (n, d) => `You have ${n} diamonds. Each stack holds ${d} diamonds.`,                              q: () => `How many full stacks can you make?` },
-  { kind: "group", remOk: true,  t: (n, d) => `There are ${n} apples. Each box holds ${d} apples.`,                                   q: () => `How many boxes can be filled completely?` },
-  { kind: "group", remOk: false, t: (n, d) => `${n} chairs are set out in rows of ${d}.`,                                             q: () => `How many rows are there?` },
-  { kind: "group", remOk: false, t: (n, d) => `A robot repeats a loop, moving ${d} steps each time. Altogether it moves ${n} steps.`, q: () => `How many times did the loop repeat?` },
-  { kind: "group", remOk: true,  t: (n, d) => `Henry has ${n} minutes of practice to do, ${d} minutes at a time.`,                    q: () => `How many full practice sessions is that?` },
+  // ---------- SHARING: how many in each? ----------
+  { kind: "share", remOk: false, gLabel: "friends",  eLabel: "cards each",    t: (n, d) => `Henry has ${n} basketball cards. He shares them equally between ${d} friends.`, q: () => `How many cards does each friend get?` },
+  { kind: "share", remOk: false, gLabel: "players",  eLabel: "points each",   t: (n, d) => `The Hawks scored ${n} points. All ${d} players scored the same number.`, q: () => `How many points did each player score?` },
+  { kind: "share", remOk: true,  gLabel: "chests",   eLabel: "blocks each",   t: (n, d) => `You have ${n} blocks of stone to split evenly between ${d} chests.`, q: () => `How many blocks go in each chest?` },
+  { kind: "share", remOk: false, gLabel: "players",  eLabel: "Robux each",    t: (n, d) => `${n} Robux is shared equally between ${d} players.`, q: () => `How many Robux does each player get?` },
+  { kind: "share", remOk: true,  gLabel: "kids",     eLabel: "stickers each", t: (n, d) => `A packet of ${n} stickers is shared out between ${d} kids, as evenly as possible.`, q: () => `How many stickers does each kid get?` },
+  { kind: "share", remOk: false, gLabel: "parts",    eLabel: "seconds each",  t: (n, d) => `A ${n} second song is split into ${d} equal parts.`, q: () => `How long is each part, in seconds?` },
+  { kind: "share", remOk: true,  gLabel: "party bags", eLabel: "lollies each", t: (n, d) => `${n} lollies are shared between ${d} party bags, as evenly as possible.`, q: () => `How many lollies go in each bag?` },
+  { kind: "share", remOk: false, gLabel: "days",     eLabel: "pages a day",   t: (n, d) => `Henry reads a ${n} page book over ${d} days, the same number of pages each day.`, q: () => `How many pages does he read each day?` },
+  { kind: "share", remOk: false, gLabel: "people",   eLabel: "dollars each",  t: (n, d) => `A $${n} pizza order is split equally between ${d} people.`, q: () => `How much does each person pay, in dollars?` },
+  { kind: "share", remOk: true,  gLabel: "jars",     eLabel: "marbles each",  t: (n, d) => `${n} marbles are shared between ${d} jars as evenly as possible.`, q: () => `How many marbles are in each jar?` },
+  { kind: "share", remOk: false, gLabel: "quarters", eLabel: "points each",   t: (n, d) => `A team scored ${n} points across ${d} quarters, the same in every quarter.`, q: () => `How many points did they score each quarter?` },
+  { kind: "share", remOk: false, gLabel: "days",     eLabel: "minutes a day", t: (n, d) => `Henry gets ${n} minutes of screen time to use equally over ${d} days.`, q: () => `How many minutes can he use each day?` },
+  { kind: "share", remOk: true,  gLabel: "piles",    eLabel: "bricks each",   t: (n, d) => `${n} Lego bricks are sorted into ${d} piles of the same size.`, q: () => `How many bricks are in each pile?` },
+  { kind: "share", remOk: false, gLabel: "shelves",  eLabel: "books each",    t: (n, d) => `${n} books are arranged equally across ${d} shelves.`, q: () => `How many books are on each shelf?` },
+  { kind: "share", remOk: true,  gLabel: "players",  eLabel: "cards each",    t: (n, d) => `${n} cards are dealt out one at a time to ${d} players.`, q: () => `How many cards does each player get?` },
+
+  // ---------- GROUPING: how many groups? ----------
+  { kind: "group", remOk: true,  gLabel: "teams",    eLabel: "players a team", t: (n, d) => `${n} children turn up to basketball. Each team needs ${d} players.`, q: () => `How many full teams can they make?` },
+  { kind: "group", remOk: true,  gLabel: "stacks",   eLabel: "diamonds a stack", t: (n, d) => `You have ${n} diamonds. Each stack holds ${d} diamonds.`, q: () => `How many full stacks can you make?` },
+  { kind: "group", remOk: true,  gLabel: "boxes",    eLabel: "apples a box",  t: (n, d) => `There are ${n} apples. Each box holds ${d} apples.`, q: () => `How many boxes can be filled completely?` },
+  { kind: "group", remOk: false, gLabel: "rows",     eLabel: "chairs a row",  t: (n, d) => `${n} chairs are set out in rows of ${d}.`, q: () => `How many rows are there?` },
+  { kind: "group", remOk: false, gLabel: "repeats",  eLabel: "steps a loop",  t: (n, d) => `A robot repeats a loop, moving ${d} steps each time. Altogether it moves ${n} steps.`, q: () => `How many times did the loop repeat?` },
+  { kind: "group", remOk: true,  gLabel: "sessions", eLabel: "minutes each",  t: (n, d) => `Henry has ${n} minutes of practice to do, ${d} minutes at a time.`, q: () => `How many full practice sessions is that?` },
+  { kind: "group", remOk: true,  gLabel: "cartons",  eLabel: "eggs a carton", t: (n, d) => `A farmer has ${n} eggs and packs them into cartons of ${d}.`, q: () => `How many cartons can she fill?` },
+  { kind: "group", remOk: true,  gLabel: "minibuses", eLabel: "seats each",   t: (n, d) => `${n} students are going on camp. Each minibus seats ${d} students.`, q: () => `How many minibuses will be completely full?` },
+  { kind: "group", remOk: true,  gLabel: "packets",  eLabel: "cookies each",  t: (n, d) => `${n} cookies are packed into packets of ${d}.`, q: () => `How many full packets is that?` },
+  { kind: "group", remOk: true,  gLabel: "pages",    eLabel: "photos a page", t: (n, d) => `${n} photos go in an album, ${d} photos on each page.`, q: () => `How many pages get filled?` },
+  { kind: "group", remOk: false, gLabel: "laps",     eLabel: "metres a lap",  t: (n, d) => `Henry runs ${n} metres around a ${d} metre track.`, q: () => `How many laps does he run?` },
+  { kind: "group", remOk: true,  gLabel: "servers",  eLabel: "players each",  t: (n, d) => `${n} players join a Roblox game. Each server holds ${d} players.`, q: () => `How many servers get completely filled?` },
+  { kind: "group", remOk: false, gLabel: "weeks",    eLabel: "days a week",   t: (n, d) => `Henry trains ${d} days every week. He has trained ${n} days in total.`, q: () => `How many weeks has he been training?` },
+  { kind: "group", remOk: true,  gLabel: "bunches",  eLabel: "flowers each",  t: (n, d) => `${n} flowers are tied into bunches of ${d}.`, q: () => `How many bunches can be made?` },
+  { kind: "group", remOk: false, gLabel: "trays",    eLabel: "muffins a tray", t: (n, d) => `${n} muffins are baked in trays that hold ${d} each.`, q: () => `How many trays were used?` },
 ];
+
+// the Equal Groups schema for a problem: which slot is the question mark
+function wdSchema(p) {
+  return p.tpl.kind === "share"
+    ? { total: p.n, groups: p.d, each: null, gLabel: p.tpl.gLabel, eLabel: p.tpl.eLabel }
+    : { total: p.n, groups: null, each: p.d, gLabel: p.tpl.gLabel, eLabel: p.tpl.eLabel };
+}
 
 function wdMakeProblem(wantRemainder) {
   const pool = wantRemainder ? WD_TEMPLATES.filter((t) => t.remOk) : WD_TEMPLATES;
@@ -1785,10 +1826,32 @@ function wdChoices(p) {
   return shuffled(opts);
 }
 
+// tape/bar diagram — the total split into equal parts, the standard model for this
+function wdBarModel(p) {
+  // the bar has to match the STORY: sharing draws one part per group (d parts of q),
+  // grouping draws one part per group made (q parts of d)
+  const share = p.tpl.kind === "share";
+  const nParts = share ? p.d : p.q;
+  const perPart = share ? p.q : p.d;
+  const box = el("div", "wd-bar-wrap");
+  box.appendChild(el("div", "wd-bar-total", `${p.n} altogether`));
+  const bar = el("div", "wd-bar");
+  const shown = Math.min(nParts, 12);
+  for (let i = 0; i < shown; i++) bar.appendChild(el("div", "wd-bar-part", String(perPart)));
+  if (nParts > shown) bar.appendChild(el("div", "wd-bar-part more", "…"));
+  if (p.rem > 0) bar.appendChild(el("div", "wd-bar-part rem", String(p.rem)));
+  box.appendChild(bar);
+  box.appendChild(el("div", "wd-bar-caption",
+    `${nParts} ${share ? p.tpl.gLabel : "group" + (nParts === 1 ? "" : "s")} of ${perPart}` +
+    (p.rem ? `, with ${p.rem} left over` : "")));
+  return box;
+}
+
 function renderWords(fresh) {
   G = null; COACH = null; HX = null; MD = null;
   hushCoach();
-  if (fresh || !WD) WD = { idx: 0, score: 0, done: false, p: null };
+  if (fresh || !WD) WD = { idx: 0, score: 0, done: false, p: null, lesson: !store.wdSeenLesson };
+  if (WD.lesson) store.wdSeenLesson = true, saveStore();
   if (!WD.p) {
     WD.p = wdMakeProblem(WD.idx >= WD_LEN - 2);   // last two are the remainder stretch
     WD.choices = wdChoices(WD.p);
@@ -1816,6 +1879,32 @@ function renderWords(fresh) {
   });
   wrap.appendChild(back);
 
+  if (WD.lesson) {
+    wrap.appendChild(el("h2", "coach-title", "How to read one 📖"));
+    const l = el("div", "wd-lesson");
+    l.innerHTML =
+      `<p><b>Every division story has three parts.</b> Two are given to you, and one is the question.</p>` +
+      `<div class="wd-lesson-strip">` +
+        `<span class="wd-chipbox">TOTAL<br><small>how many altogether</small></span>` +
+        `<span class="wd-chipbox">GROUPS<br><small>how many groups</small></span>` +
+        `<span class="wd-chipbox">IN EACH<br><small>how many in one group</small></span>` +
+      `</div>` +
+      `<p><b>Read it three times</b> — that's the trick, and it works on any problem:</p>` +
+      `<p class="wd-read"><b>1st read —</b> what's the <em>story</em> about? Forget the numbers completely.</p>` +
+      `<p class="wd-read"><b>2nd read —</b> what are the <em>numbers</em>, and what does each one count? Fill in two of the three boxes.</p>` +
+      `<p class="wd-read"><b>3rd read —</b> what is it actually <em>asking</em> for? That's the empty box.</p>` +
+      `<p><b>Then pick the number sentence.</b> The total always goes first in a division: ` +
+      `<span class="wd-hl">total ÷ what you know = what you want</span>.</p>` +
+      `<p class="wd-warn-note">⚠️ Don't hunt for magic words. "Each" doesn't always mean divide, and "altogether" ` +
+      `doesn't always mean add. Work out the three parts instead — that never lies to you.</p>`;
+    wrap.appendChild(l);
+    const go = el("button", "big-btn primary", "Got it — let's go ▶");
+    go.addEventListener("click", () => { WD.lesson = false; sfx.select(); renderWords(); });
+    wrap.appendChild(go);
+    app.appendChild(wrap);
+    return;
+  }
+
   if (WD.done) {
     wrap.appendChild(el("h2", "coach-title", "Word Problems 📖"));
     wrap.appendChild(el("div", "final-score", `${WD.score} / ${WD_LEN}`));
@@ -1829,14 +1918,36 @@ function renderWords(fresh) {
 
   const p = WD.p;
   wrap.appendChild(el("h2", "coach-title", "Word Problems 📖"));
-  wrap.appendChild(el("div", "md-progress", `Problem ${WD.idx + 1} of ${WD_LEN}  ·  Score ${WD.score}`));
+  const topRow = el("div", "wd-toprow");
+  topRow.appendChild(el("div", "md-progress", `Problem ${WD.idx + 1} of ${WD_LEN}  ·  Score ${WD.score}`));
+  const howBtn = el("button", "wd-how", "How to read one");
+  howBtn.addEventListener("click", () => { WD.lesson = true; sfx.tap(); renderWords(); });
+  topRow.appendChild(howBtn);
+  wrap.appendChild(topRow);
   if (p.remainder) wrap.appendChild(el("div", "md-warn", "⭐ Challenge — this one won't share out evenly."));
+
+  // Equal Groups schema — the three slots, two known and one asked for
+  const sc = wdSchema(p);
+  const strip = el("div", "wd-schema");
+  const slot = (label, value, sub) => {
+    const box = el("div", "wd-slot" + (value === null ? " unknown" : ""));
+    box.appendChild(el("div", "wd-slot-label", label));
+    box.appendChild(el("div", "wd-slot-val", value === null ? "?" : String(value)));
+    if (sub) box.appendChild(el("div", "wd-slot-sub", sub));
+    return box;
+  };
+  strip.appendChild(slot("TOTAL", sc.total, ""));
+  strip.appendChild(el("div", "wd-schema-sep", "→"));
+  strip.appendChild(slot("GROUPS", sc.groups, sc.gLabel));
+  strip.appendChild(el("div", "wd-schema-sep", "→"));
+  strip.appendChild(slot("IN EACH", sc.each, sc.eLabel));
 
   const story = el("div", "wd-story");
   const article = (txt) => txt.replace(/\bA (8|11|18|80|8\d)\b/g, "An $1").replace(/\bA ([aeiou])/g, "An $1");
   story.innerHTML = `<p>${article(p.tpl.t(p.n, p.d))}</p><p class="wd-q">${p.tpl.q(p.d)}</p>` +
     (p.remainder ? `<p class="wd-q">And how many are left over?</p>` : "");
   wrap.appendChild(story);
+  wrap.appendChild(strip);
 
   if (WD.step === 1) {
     wrap.appendChild(el("div", "wd-prompt", "First: which number sentence solves it?"));
@@ -1936,11 +2047,12 @@ function renderWords(fresh) {
   wrap.appendChild(btns);
 
   if (WD.checked && WD.fact) {
+    wrap.appendChild(wdBarModel(p));
     const w = el("div", "working");
     w.innerHTML = `<b>Why:</b> ${WD.fact}<br>` +
       (p.tpl.kind === "share"
-        ? `This one <b>shares</b> a total into equal groups — you're finding how many in each.`
-        : `This one makes <b>groups of ${p.d}</b> — you're finding how many groups.`);
+        ? `This is a <b>sharing</b> story: you knew the total and the number of groups, and found <b>how many in each</b>.`
+        : `This is a <b>grouping</b> story: you knew the total and how many in each, and found <b>how many groups</b>.`);
     wrap.appendChild(w);
   }
 
