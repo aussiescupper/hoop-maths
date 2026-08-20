@@ -312,6 +312,7 @@ function renderHome() {
   COACH = null;
   HX = null;
   MD = null;
+  WD = null;
   app.innerHTML = "";
   const home = el("div", "home");
 
@@ -349,7 +350,9 @@ function renderHome() {
   hxBtn.addEventListener("click", () => { sfx.select(); renderHorizontal(); });
   const mdBtn = el("button", "coach-btn", "🔍 Magic Digits");
   mdBtn.addEventListener("click", () => { sfx.select(); renderMagic(); });
-  boxRow.append(coachBtn, hxBtn, mdBtn);
+  const wdBtn = el("button", "coach-btn", "📖 Word Problems");
+  wdBtn.addEventListener("click", () => { sfx.select(); renderWords(true); });
+  boxRow.append(coachBtn, hxBtn, mdBtn, wdBtn);
   home.appendChild(boxRow);
 
   const toggleRow = el("div", "toggle-row");
@@ -1254,7 +1257,7 @@ function hxSetTab(tab) {
 }
 
 function renderHorizontal(tab = "learn") {
-  G = null; COACH = null; MD = null;
+  G = null; COACH = null; MD = null; WD = null;
   hushCoach();
   const keep = HX && HX.tab === tab ? HX : null;
   HX = keep || { tab, q: null, cells: [], active: 0, practiceChecked: false, testChecked: false, testIdx: 0, testScore: 0, testDone: false, q2: null, val: "" };
@@ -1526,7 +1529,7 @@ function mdHint(p) {
 }
 
 function renderMagic(fresh) {
-  G = null; COACH = null; HX = null;
+  G = null; COACH = null; HX = null; WD = null;
   hushCoach();
   if (fresh || !MD) {
     MD = { idx: 0, score: 0, done: false, puzzle: null, slots: [null, null, null], picked: null, checked: false, showHint: false };
@@ -1726,6 +1729,219 @@ function renderMagic(fresh) {
 
   if (MD.idx >= 3 && !MD.checked) {
     wrap.appendChild(el("div", "md-warn", "⚠️ Careful — from here on, some of these can't be done at all."));
+  }
+
+  app.appendChild(wrap);
+}
+
+/* ================= Word Problems (division) ================= */
+let WD = null;
+const WD_LEN = 8;
+
+// SHARE = partitive ("shared between 4" -> how many each). GROUP = quotitive
+// ("teams of 4" -> how many teams). Grouping is the harder read, so it gets equal billing.
+const WD_TEMPLATES = [
+  // remOk: the wording still makes sense when it does NOT divide evenly
+  { kind: "share", remOk: false, t: (n, d) => `Henry has ${n} basketball cards. He shares them equally between ${d} friends.`,       q: () => `How many cards does each friend get?` },
+  { kind: "share", remOk: false, t: (n, d) => `The Hawks scored ${n} points. All ${d} players scored the same number.`,               q: () => `How many points did each player score?` },
+  { kind: "share", remOk: true,  t: (n, d) => `You have ${n} blocks of stone to split evenly between ${d} chests.`,                   q: () => `How many blocks go in each chest?` },
+  { kind: "share", remOk: false, t: (n, d) => `${n} Robux is shared equally between ${d} players.`,                                   q: () => `How many Robux does each player get?` },
+  { kind: "share", remOk: true,  t: (n, d) => `A packet of ${n} stickers is shared out between ${d} kids, as evenly as possible.`,    q: () => `How many stickers does each kid get?` },
+  { kind: "share", remOk: false, t: (n, d) => `A ${n} second song is split into ${d} equal parts.`,                                   q: () => `How long is each part, in seconds?` },
+  { kind: "group", remOk: true,  t: (n, d) => `${n} children turn up to basketball. Each team needs ${d} players.`,                   q: () => `How many full teams can they make?` },
+  { kind: "group", remOk: true,  t: (n, d) => `You have ${n} diamonds. Each stack holds ${d} diamonds.`,                              q: () => `How many full stacks can you make?` },
+  { kind: "group", remOk: true,  t: (n, d) => `There are ${n} apples. Each box holds ${d} apples.`,                                   q: () => `How many boxes can be filled completely?` },
+  { kind: "group", remOk: false, t: (n, d) => `${n} chairs are set out in rows of ${d}.`,                                             q: () => `How many rows are there?` },
+  { kind: "group", remOk: false, t: (n, d) => `A robot repeats a loop, moving ${d} steps each time. Altogether it moves ${n} steps.`, q: () => `How many times did the loop repeat?` },
+  { kind: "group", remOk: true,  t: (n, d) => `Henry has ${n} minutes of practice to do, ${d} minutes at a time.`,                    q: () => `How many full practice sessions is that?` },
+];
+
+function wdMakeProblem(wantRemainder) {
+  const pool = wantRemainder ? WD_TEMPLATES.filter((t) => t.remOk) : WD_TEMPLATES;
+  const tpl = pool[Math.floor(Math.random() * pool.length)];
+  // lean on the tables the school wants automatic by year's end
+  const tables = [2, 3, 4, 5, 10, 3, 4, 5, 6, 8];
+  for (let tries = 0; tries < 40; tries++) {
+    const d = tables[Math.floor(Math.random() * tables.length)];
+    const q = randInt(3, Math.min(12, Math.floor(92 / d)));
+    const exact = d * q;
+    if (exact < 12) continue;                          // keep it Year-3 sized, not toddler-sized
+    if (wantRemainder) {
+      if (d < 3) continue;                             // a remainder of 1 out of 2 is a poor example
+      const rem = randInt(1, d - 1);
+      const n = exact + rem;
+      if (n > 99) continue;
+      return { tpl, n, d, q, rem, remainder: true };
+    }
+    return { tpl, n: exact, d, q, rem: 0, remainder: false };
+  }
+  return { tpl, n: 24, d: 4, q: 6, rem: 0, remainder: false };
+}
+
+function wdChoices(p) {
+  const right = `${p.n} ÷ ${p.d}`;
+  const set = new Set([right, `${p.n} × ${p.d}`, `${p.d} ÷ ${p.n}`, `${p.n} − ${p.d}`, `${p.n} + ${p.d}`]);
+  const opts = [right, ...shuffled([...set].filter((x) => x !== right)).slice(0, 3)];
+  return shuffled(opts);
+}
+
+function renderWords(fresh) {
+  G = null; COACH = null; HX = null; MD = null;
+  hushCoach();
+  if (fresh || !WD) WD = { idx: 0, score: 0, done: false, p: null };
+  if (!WD.p) {
+    WD.p = wdMakeProblem(WD.idx >= WD_LEN - 2);   // last two are the remainder stretch
+    WD.choices = wdChoices(WD.p);
+    WD.step = 1;
+    WD.choice = null;
+    WD.val = "";
+    WD.valR = "";
+    WD.field = "q";
+    WD.checked = false;
+    WD.msg = "";
+    WD.correct = false;
+  }
+  app.innerHTML = "";
+  const wrap = el("div", "wd");
+
+  const back = el("button", "coach-back", "✕");
+  back.setAttribute("aria-label", "Back to home");
+  back.addEventListener("click", () => {
+    if (!back.dataset.arm) {
+      back.dataset.arm = "1"; back.textContent = "Leave?"; back.classList.add("wide");
+      setTimeout(() => { if (back.isConnected) { delete back.dataset.arm; back.textContent = "✕"; back.classList.remove("wide"); } }, 2200);
+      sfx.tap(); return;
+    }
+    sfx.tap(); renderHome();
+  });
+  wrap.appendChild(back);
+
+  if (WD.done) {
+    wrap.appendChild(el("h2", "coach-title", "Word Problems 📖"));
+    wrap.appendChild(el("div", "final-score", `${WD.score} / ${WD_LEN}`));
+    wrap.appendChild(el("div", "hx-sub", WD.score >= WD_LEN - 1 ? "Outstanding reading AND maths." : "Good work — read each one twice."));
+    const again = el("button", "big-btn primary", "Play again");
+    again.addEventListener("click", () => { sfx.select(); renderWords(true); });
+    wrap.appendChild(again);
+    app.appendChild(wrap);
+    return;
+  }
+
+  const p = WD.p;
+  wrap.appendChild(el("h2", "coach-title", "Word Problems 📖"));
+  wrap.appendChild(el("div", "md-progress", `Problem ${WD.idx + 1} of ${WD_LEN}  ·  Score ${WD.score}`));
+  if (p.remainder) wrap.appendChild(el("div", "md-warn", "⭐ Challenge — this one won't share out evenly."));
+
+  const story = el("div", "wd-story");
+  const article = (txt) => txt.replace(/\bA (8|11|18|80|8\d)\b/g, "An $1").replace(/\bA ([aeiou])/g, "An $1");
+  story.innerHTML = `<p>${article(p.tpl.t(p.n, p.d))}</p><p class="wd-q">${p.tpl.q(p.d)}</p>` +
+    (p.remainder ? `<p class="wd-q">And how many are left over?</p>` : "");
+  wrap.appendChild(story);
+
+  if (WD.step === 1) {
+    wrap.appendChild(el("div", "wd-prompt", "First: which number sentence solves it?"));
+    const grid = el("div", "wd-choices");
+    WD.choices.forEach((c) => {
+      const b = el("button", "wd-choice", c);
+      b.addEventListener("click", () => {
+        WD.choice = c;
+        if (c === `${p.n} ÷ ${p.d}`) {
+          WD.step = 2; WD.msg = ""; sfx.swish();
+        } else {
+          WD.msg = c.includes("×")
+            ? "That would make it bigger — but we're splitting them up."
+            : c.startsWith(`${p.d} ÷`)
+              ? "Careful — that's the wrong way round. Start with the total."
+              : "Not that one. We're sharing the total into equal groups.";
+          WD.wrongPick = true;
+          sfx.rim();
+        }
+        renderWords();
+      });
+      grid.appendChild(b);
+    });
+    wrap.appendChild(grid);
+  } else {
+    wrap.appendChild(el("div", "wd-prompt", `Now solve it:  ${p.n} ÷ ${p.d} =`));
+    const boxes = el("div", "wd-answer");
+    const mkBox = (field, label) => {
+      const holder = el("div", "wd-boxwrap");
+      if (label) holder.appendChild(el("div", "hx-label", label));
+      const box = el("div", "hx-box" + (WD.field === field && !WD.checked ? " active" : ""),
+                     field === "q" ? WD.val : WD.valR);
+      if (WD.checked) box.classList.add(WD.correct ? "good" : "bad");
+      box.addEventListener("click", () => { if (!WD.checked) { WD.field = field; sfx.select(); renderWords(); } });
+      holder.appendChild(box);
+      boxes.appendChild(holder);
+    };
+    mkBox("q", p.remainder ? "answer" : "");
+    if (p.remainder) mkBox("r", "left over");
+    wrap.appendChild(boxes);
+  }
+
+  if (WD.msg) {
+    const fb = el("div", "feedback-line " + (WD.correct ? "good" : "bad"));
+    fb.textContent = WD.msg;
+    wrap.appendChild(fb);
+  }
+
+  if (WD.step === 2 && !WD.checked) {
+    wrap.appendChild(hxNumpad((k) => {
+      const cur = WD.field === "q" ? WD.val : WD.valR;
+      let next = cur;
+      if (k === "C") next = "";
+      else if (k === "⌫") next = cur.slice(0, -1);
+      else if (cur.length < 3) next = cur + k;
+      if (WD.field === "q") WD.val = next; else WD.valR = next;
+      sfx.tap();
+      renderWords();
+    }));
+  }
+
+  const btns = el("div", "hx-btns");
+  if (WD.checked) {
+    const next = el("button", "big-btn primary", WD.idx + 1 >= WD_LEN ? "See my score" : "Next ▶");
+    next.addEventListener("click", () => {
+      WD.idx++;
+      if (WD.idx >= WD_LEN) WD.done = true;
+      WD.p = null;
+      sfx.select();
+      renderWords();
+    });
+    btns.appendChild(next);
+  } else if (WD.step === 2) {
+    const check = el("button", "big-btn primary", "Check");
+    check.addEventListener("click", () => {
+      if (WD.val === "" || (p.remainder && WD.valR === "")) { sfx.miss(); return; }
+      const ok = WD.val === String(p.q) && (!p.remainder || WD.valR === String(p.rem));
+      WD.correct = ok;
+      WD.checked = true;
+      if (ok && !WD.wrongPick) WD.score++;
+      WD.msg = ok
+        ? (WD.wrongPick ? `Right answer — but read the sentence choice again next time.` : `Yes! ${p.n} ÷ ${p.d} = ${p.q}${p.remainder ? ` remainder ${p.rem}` : ""} 🏀`)
+        : `Not quite. ${p.n} ÷ ${p.d} = ${p.q}${p.remainder ? ` remainder ${p.rem}` : ""}.`;
+      // always show the fact-family link — the whole point of the unit
+      WD.fact = p.remainder
+        ? `${p.q} groups of ${p.d} is ${p.d * p.q}, and ${p.rem} left over makes ${p.n}. ` +
+          `So ${p.n} ÷ ${p.d} = ${p.q} remainder ${p.rem}.`
+        : `${p.d} × ${p.q} = ${p.d * p.q}, so ${p.n} ÷ ${p.d} = ${p.q}`;
+      ok ? sfx.swish() : sfx.rim();
+      renderWords();
+    });
+    btns.appendChild(check);
+    const back2 = el("button", "big-btn secondary", "◀ Change sentence");
+    back2.addEventListener("click", () => { WD.step = 1; WD.msg = ""; sfx.tap(); renderWords(); });
+    btns.appendChild(back2);
+  }
+  wrap.appendChild(btns);
+
+  if (WD.checked && WD.fact) {
+    const w = el("div", "working");
+    w.innerHTML = `<b>Why:</b> ${WD.fact}<br>` +
+      (p.tpl.kind === "share"
+        ? `This one <b>shares</b> a total into equal groups — you're finding how many in each.`
+        : `This one makes <b>groups of ${p.d}</b> — you're finding how many groups.`);
+    wrap.appendChild(w);
   }
 
   app.appendChild(wrap);

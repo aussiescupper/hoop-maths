@@ -24,7 +24,7 @@ A ScupperLab production.
 - Problems are generated to almost always involve carrying, and deliberately
   include internal-zero numbers (304 × 6 style) — the classic place-value traps.
 
-## The three task boxes
+## The four task boxes
 
 - **🎓 Coach's Clinic** — animated walkthrough of the column method, narrated in Dad's
   voice. Two chapters: 47 × 8, then 485 × 8.
@@ -33,6 +33,10 @@ A ScupperLab production.
 - **🔍 Magic Digits** — place the given digits to complete the multiplication, in the
   style of the school's problem-solving cards. From puzzle 4 on, some genuinely
   cannot be done, and spotting those earns the point.
+- **📖 Word Problems** — worded division in two steps: first choose the number
+  sentence, then solve it. Sharing and grouping structures get equal billing
+  (grouping is the harder read), every answer reveals the matching times-table
+  fact, and the last two of eight are a remainder challenge.
 
 ## Install on iPad
 

@@ -771,3 +771,32 @@ button {
 .coach-back.wide { width: auto; padding: 0 16px; border-radius: 24px; font-size: 15px; font-weight: bold; }
 /* iOS 44pt minimum on the tab strip */
 .hx-tab { min-height: 44px; }
+
+/* ---------- Word Problems ---------- */
+.wd {
+  position: relative; width: 100%; max-width: 720px; height: 100%;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 8px 14px calc(16px + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+.wd-story {
+  background: var(--paper); color: var(--ink);
+  border-radius: 16px; box-shadow: var(--shadow);
+  padding: 16px 20px; width: 100%; max-width: 520px;
+  font-size: clamp(16px, 2.6vh, 20px); line-height: 1.6;
+}
+.wd-story p { margin-bottom: 8px; }
+.wd-story p:last-child { margin-bottom: 0; }
+.wd-story .wd-q { font-weight: bold; color: var(--ball-dark); }
+.wd-prompt { font-size: clamp(15px, 2.3vh, 18px); font-weight: bold; opacity: .95; text-align: center; }
+.wd-choices { display: grid; grid-template-columns: repeat(2, minmax(130px, 1fr)); gap: 10px; width: 100%; max-width: 420px; }
+.wd-choice {
+  padding: 16px 8px; border-radius: 14px;
+  background: var(--paper); color: var(--ink);
+  font-size: clamp(19px, 3vh, 24px); font-weight: bold;
+  box-shadow: 0 5px 0 rgba(0,0,0,.22);
+}
+.wd-choice:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,.22); }
+.wd-answer { display: flex; gap: 18px; align-items: flex-end; justify-content: center; }
+.wd-boxwrap { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.wd-boxwrap .hx-label { min-width: 0; font-size: 13px; opacity: .8; }
