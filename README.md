@@ -11,7 +11,8 @@ A ScupperLab production.
 
 ## How it plays
 
-- Pick a mode: **2-digit**, **3-digit**, or **Mix it up** (five of each).
+- Pick a mode: **2-digit**, **3-digit**, **Double digits** (2-digit × 2-digit, worked
+  as two partial products and a sum — 4-pointers), or **Mix it up**.
 - Build the answer from the **ones column**, right to left, on the big numpad.
   The dashed boxes above the sum are scratch space for carries (turn them off
   on the home screen when you can carry in your head).
@@ -22,6 +23,16 @@ A ScupperLab production.
   records are saved on the device.
 - Problems are generated to almost always involve carrying, and deliberately
   include internal-zero numbers (304 × 6 style) — the classic place-value traps.
+
+## The three task boxes
+
+- **🎓 Coach's Clinic** — animated walkthrough of the column method, narrated in Dad's
+  voice. Two chapters: 47 × 8, then 485 × 8.
+- **📐 Horizontal Multiplication** — the partitioning strategy (47 × 6 → 40 × 6 plus
+  7 × 6). Three tabs: how it works, scaffolded practice, and an 8-question self-test.
+- **🔍 Magic Digits** — place the given digits to complete the multiplication, in the
+  style of the school's problem-solving cards. From puzzle 4 on, some genuinely
+  cannot be done, and spotting those earns the point.
 
 ## Install on iPad
 
