@@ -155,6 +155,70 @@ async function claimPrize() {
   vid.play().catch(() => {});
 }
 
+/* ---------- Trawley Coin bridge ----------
+   Hoop Maths and Trawley Coin are hosted side by side on the same origin
+   (…github.io/hoop-maths/ and …github.io/trawley-coin/), so this bridge
+   imports Trawley Coin's own store module and submits a request exactly the
+   way the kid app does. Demo mode shares this browser's storage; once
+   Firebase is configured in Trawley Coin it syncs across devices. */
+const TRAWLEY_BASE = new URL("../trawley-coin/", location.href).href;
+const TRAWLEY_QUEUE_KEY = "hoopmaths.trawley.pending";
+
+let trawleyPromise = null;
+function trawley() {
+  if (!trawleyPromise) {
+    trawleyPromise = (async () => {
+      if (window.TRAWLEY_FIREBASE_CONFIG === undefined) {
+        await new Promise((res, rej) => {
+          const sc = document.createElement("script");
+          sc.src = TRAWLEY_BASE + "shared/config.js";
+          sc.onload = res;
+          sc.onerror = () => rej(new Error("Trawley Coin isn't reachable"));
+          document.head.appendChild(sc);
+        });
+      }
+      const mod = await import(TRAWLEY_BASE + "shared/store.js");
+      const st = await mod.createStore();
+      return { mod, st };
+    })().catch((e) => { trawleyPromise = null; throw e; });
+  }
+  return trawleyPromise;
+}
+
+function trawleySuggestedCoins(score, perfect) {
+  return Math.max(1, Math.floor(score / 10)) + (perfect ? 1 : 0);
+}
+
+async function trawleySend(entry) {
+  const { mod, st } = await trawley();
+  if (st.mode === "firebase" && st.needsSetup()) throw new Error("needs-code");
+  await mod.submitRequest(st, {
+    choreName: entry.choreName,
+    coins: entry.coins,
+    note: entry.note,
+  });
+}
+
+function trawleyQueue(entry) {
+  try {
+    const q = JSON.parse(localStorage.getItem(TRAWLEY_QUEUE_KEY) || "[]");
+    q.push(entry);
+    localStorage.setItem(TRAWLEY_QUEUE_KEY, JSON.stringify(q.slice(-20)));
+  } catch (e) { /* full/blocked storage: drop rather than crash the game */ }
+}
+
+async function trawleyFlush() {
+  let q = [];
+  try { q = JSON.parse(localStorage.getItem(TRAWLEY_QUEUE_KEY) || "[]"); } catch (e) { return; }
+  if (!q.length) return;
+  try {
+    for (const entry of q) await trawleySend(entry);
+    localStorage.removeItem(TRAWLEY_QUEUE_KEY);
+  } catch (e) { /* still offline or unlinked — try again next time */ }
+}
+window.addEventListener("online", () => { trawleyFlush(); });
+setTimeout(() => { trawleyFlush(); }, 4000);
+
 /* ---------- modes ---------- */
 const MODES = {
   two:    { label: "2-digit",       sample: "63 × 9",  pts: 2, digits: [2] },
@@ -401,6 +465,32 @@ function renderHome() {
   });
   prizeRow.append(prizeBtn, removeBtn, fileInput);
   home.appendChild(prizeRow);
+
+  // Trawley Coin link (parents): status + family-code entry when Firebase is on
+  const twRow = el("div", "prize-row");
+  const twBtn = el("button", "prize-btn", "🪙 Trawley Coin link");
+  twBtn.addEventListener("click", async () => {
+    twBtn.textContent = "🪙 Checking…";
+    try {
+      const { mod, st } = await trawley();
+      if (st.mode === "demo") {
+        twBtn.textContent = "🪙 Linked (this device) — rounds can ask for coins";
+      } else if (!st.needsSetup()) {
+        twBtn.textContent = `🪙 Linked to family ${st.familyCode()}`;
+      } else {
+        const code = (window.prompt("Enter your Trawley Coin family code (6 letters):") || "").trim();
+        if (!code) { twBtn.textContent = "🪙 Trawley Coin link"; return; }
+        await st.joinFamily(code);
+        twBtn.textContent = `🪙 Linked to family ${st.familyCode()}`;
+        trawleyFlush();
+      }
+      sfx.select();
+    } catch (e) {
+      twBtn.textContent = "🪙 " + (e && e.message === "needs-code" ? "Enter the family code to link" : (e.message || "Couldn't reach Trawley Coin"));
+    }
+  });
+  twRow.append(twBtn);
+  home.appendChild(twRow);
 
   home.appendChild(el("div", "scupperlab", "A ScupperLab production"));
   app.appendChild(home);
@@ -1191,6 +1281,34 @@ function endRound() {
     const prize = el("button", "big-btn prize-claim", "🎁 CLAIM YOUR PRIZE!");
     prize.addEventListener("click", () => { sfx.cheer(); claimPrize(); });
     summary.appendChild(prize);
+  }
+
+  if (G.score > 0) {
+    const suggested = trawleySuggestedCoins(G.score, perfect);
+    const coinBtn = el("button", "big-btn trawley-btn", `🪙 Ask for ${suggested} Trawley Coin${suggested === 1 ? "" : "s"}`);
+    const entry = {
+      choreName: `🏀 Hoop Maths: ${G.score} pts (${MODES[modeId].label})`,
+      coins: suggested,
+      note: `${G.baskets}/${ROUND_LEN} baskets, best streak ${G.bestStreak}` + (perfect ? " — PERFECT GAME!" : ""),
+    };
+    coinBtn.addEventListener("click", async () => {
+      coinBtn.disabled = true;
+      coinBtn.textContent = "Sending…";
+      try {
+        await trawleySend(entry);
+        coinBtn.textContent = "Sent to Mum & Dad ✓";
+        sfx.cheer();
+      } catch (e) {
+        if (e && e.message === "needs-code") {
+          coinBtn.textContent = "Link Trawley Coin first (home screen 🪙)";
+          coinBtn.disabled = false;
+        } else {
+          trawleyQueue(entry);
+          coinBtn.textContent = "Queued — sends when online ✓";
+        }
+      }
+    });
+    summary.appendChild(coinBtn);
   }
 
   const btns = el("div", "summary-btns");

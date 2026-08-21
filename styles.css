@@ -861,3 +861,11 @@ button {
 .wd-read { padding-left: 8px; border-left: 3px solid var(--ball); }
 .wd-hl { background: #fff3e5; padding: 2px 7px; border-radius: 5px; font-weight: bold; white-space: nowrap; }
 .wd-warn-note { background: #fdf6e3; border-radius: 9px; padding: 9px 12px; font-size: 13.5px; }
+
+/* Trawley Coin ask button on the round summary */
+.trawley-btn {
+  background: var(--gold);
+  color: var(--ink);
+  box-shadow: 0 6px 0 #b8860b;
+}
+.trawley-btn:disabled { opacity: .85; transform: none; }
